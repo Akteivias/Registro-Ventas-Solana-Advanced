@@ -106,6 +106,16 @@ pub mod registro {
         Ok(())
     }
 
+    pub fn eliminar_cliente(context: Context<EliminarCliente>, _id_cliente: u16) -> Result<()> {
+        let cliente_key = context.accounts.cliente.key();
+        let cliente = &context.accounts.cliente;
+        let registro = &mut context.accounts.registro;
+        require!(registro.clientes.contains(&cliente_key), Errores::NoCliente);
+        require!(cliente.historial.is_empty() && cliente.compras == 0, Errores::ClienteConVentas);
+        registro.clientes.retain(|&key| key != cliente_key);
+        Ok(())
+    }
+
     /////////////////////////// Cambiar Monto ///////////////////////////
     // La cuenta de la venta llega ya validada por el contexto: no hay que recorrer ningun vector
     // ni reconstruir la cadena a mano.
@@ -137,6 +147,10 @@ pub enum Errores {
     NoOwner,
     #[msg("Error, la venta no esta en el historial del cliente")]
     NoSKU,
+    #[msg("Error, el cliente no esta en el registro")]
+    NoCliente,
+    #[msg("Error, el cliente tiene ventas activas")]
+    ClienteConVentas,
 }
 
 /////////////////////////// CUENTAS ///////////////////////////
@@ -331,4 +345,20 @@ pub struct EliminarVenta<'info> {
         bump
     )]
     pub venta: Account<'info, Venta>,
+}
+
+#[derive(Accounts)]
+#[instruction(id_cliente: u16)]
+pub struct EliminarCliente<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    #[account(mut, has_one = owner @ Errores::NoOwner)]
+    pub registro: Account<'info, Registro>,
+    #[account(
+        mut,
+        close = owner,
+        seeds = [b"cliente", registro.key().as_ref(), id_cliente.to_le_bytes().as_ref()],
+        bump
+    )]
+    pub cliente: Account<'info, Cliente>,
 }

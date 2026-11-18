@@ -2,7 +2,7 @@ import { address, createNoopSigner, type Address } from '@solana/kit';
 import type { Connection } from '@solana/web3.js';
 import {
   getCrearRegistroInstruction, getCrearClienteInstruction,
-  getRegistrarVentaInstruction, getCambiarMontoInstruction, getHacerDevolucionInstruction,
+  getRegistrarVentaInstruction, getCambiarMontoInstruction, getHacerDevolucionInstruction, getEliminarClienteInstruction,
 } from '../../clients/js/src/generated';
 import { cadena, pdaCliente, pdaRegistro } from './pdas';
 import { siguienteId } from './lecturas';
@@ -75,4 +75,13 @@ export async function hacerDevolucion(wallet: WalletFirma, connection: Connectio
   const { registro, cliente, venta } = cadena(nombreNegocio, owner.address, idCliente, sku);
   const ix = getHacerDevolucionInstruction({ owner, registro, cliente, venta, idCliente, sku });
   return enviar(ix, wallet, connection, opciones);
+}
+
+export async function eliminarCliente(wallet: WalletFirma, connection: Connection, nombreNegocio: string, idCliente: number, opciones?: OpcionesEnvio): Promise<string> {
+  nombreNegocio = negocioValido(nombreNegocio);
+  idCliente = idValido(idCliente);
+  const owner = firmante(wallet);
+  const registro = pdaRegistro(nombreNegocio, owner.address);
+  const cliente = pdaCliente(registro, idCliente);
+  return enviar(getEliminarClienteInstruction({ owner, registro, cliente, idCliente }), wallet, connection, opciones);
 }

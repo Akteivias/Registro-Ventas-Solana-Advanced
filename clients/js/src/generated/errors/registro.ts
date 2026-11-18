@@ -19,13 +19,22 @@ import { REGISTRO_PROGRAM_ADDRESS } from "../programs";
 export const REGISTRO_ERROR__NO_OWNER = 0x1770; // 6000
 /** NoSKU: Error, la venta no esta en el historial del cliente */
 export const REGISTRO_ERROR__NO_S_K_U = 0x1771; // 6001
+/** NoCliente: Error, el cliente no esta en el registro */
+export const REGISTRO_ERROR__NO_CLIENTE = 0x1772; // 6002
+/** ClienteConVentas: Error, el cliente tiene ventas activas */
+export const REGISTRO_ERROR__CLIENTE_CON_VENTAS = 0x1773; // 6003
 
 export type RegistroError =
-  typeof REGISTRO_ERROR__NO_OWNER | typeof REGISTRO_ERROR__NO_S_K_U;
+  | typeof REGISTRO_ERROR__CLIENTE_CON_VENTAS
+  | typeof REGISTRO_ERROR__NO_CLIENTE
+  | typeof REGISTRO_ERROR__NO_OWNER
+  | typeof REGISTRO_ERROR__NO_S_K_U;
 
 let registroErrorMessages: Record<RegistroError, string> | undefined;
 if (process.env["NODE_ENV"] !== "production") {
   registroErrorMessages = {
+    [REGISTRO_ERROR__CLIENTE_CON_VENTAS]: `Error, el cliente tiene ventas activas`,
+    [REGISTRO_ERROR__NO_CLIENTE]: `Error, el cliente no esta en el registro`,
     [REGISTRO_ERROR__NO_OWNER]: `Error, no eres el owner del registro`,
     [REGISTRO_ERROR__NO_S_K_U]: `Error, la venta no esta en el historial del cliente`,
   };

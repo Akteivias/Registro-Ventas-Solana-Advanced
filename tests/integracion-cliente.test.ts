@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { PublicKey } from '@solana/web3.js';
 import type { Connection } from '@solana/web3.js';
 import { address, createNoopSigner } from '@solana/kit';
-import { getRegistrarVentaInstruction, getRegistrarVentaInstructionDataDecoder, getCambiarMontoInstruction, REGISTRO_PROGRAM_ADDRESS } from '../clients/js/src/generated';
+import { getRegistrarVentaInstruction, getRegistrarVentaInstructionDataDecoder, getCambiarMontoInstruction, getEliminarClienteInstruction, getEliminarClienteInstructionDataDecoder, REGISTRO_PROGRAM_ADDRESS } from '../clients/js/src/generated';
 import { pdaRegistro, pdaCliente, pdaVenta } from '../src/solana/pdas';
 import { s } from '../src/solana/seeds';
 import { aWeb3, confirmarEnvio, ErrorTransaccion, ErrorConfirmacionPendiente, traducir } from '../src/solana/tx';
@@ -16,6 +16,19 @@ import { validarIdl, prepararIdl, REFERENCIA_ID } from '../scripts/contrato-idl.
 
 // Direccion publica de fixture. No se crean wallets ni se envian transacciones.
 const owner = address(new PublicKey(new Uint8Array(32).fill(7)).toBase58());
+
+test('la baja codifica el ID y conserva los permisos de las cuentas', () => {
+  const registro = pdaRegistro('Cafe', owner);
+  for (const idCliente of [1, 256, 65_535]) {
+    const cliente = pdaCliente(registro, idCliente);
+    const ix = getEliminarClienteInstruction({ owner: createNoopSigner(owner), registro, cliente, idCliente });
+    assert.deepEqual(Buffer.from(ix.data.subarray(0, 8)), createHash('sha256').update('global:eliminar_cliente').digest().subarray(0, 8));
+    assert.equal(getEliminarClienteInstructionDataDecoder().decode(ix.data).idCliente, idCliente);
+    assert.deepEqual(aWeb3(ix).keys.map(({ isSigner, isWritable }) => [isSigner, isWritable]), [[true, true], [false, true], [false, true]]);
+  }
+  assert.match(traducir(new Error('custom program error: 0x1772')), /NoCliente/);
+  assert.match(traducir(new Error('custom program error: 0x1773')), /ClienteConVentas/);
+});
 
 test('las semillas u16 conservan dos bytes little-endian y sus limites', () => {
   assert.deepEqual([...s.u16(256)], [0, 1]);
