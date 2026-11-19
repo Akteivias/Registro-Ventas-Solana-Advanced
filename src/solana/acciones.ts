@@ -2,11 +2,12 @@ import { address, createNoopSigner, type Address } from '@solana/kit';
 import type { Connection } from '@solana/web3.js';
 import {
   getCrearRegistroInstruction, getCrearClienteInstruction,
-  getRegistrarVentaInstruction, getCambiarMontoInstruction, getHacerDevolucionInstruction, getEliminarClienteInstruction,
+  getRegistrarVentaInstruction, getCambiarMontoInstruction, getHacerDevolucionInstruction,
 } from '../../clients/js/src/generated';
+import * as generado from '../../clients/js/src/generated';
 import { cadena, pdaCliente, pdaRegistro } from './pdas';
 import { siguienteId } from './lecturas';
-import { enviar, type WalletFirma, type OpcionesEnvio } from './tx';
+import { enviar, type InstruccionKit, type WalletFirma, type OpcionesEnvio } from './tx';
 import { comprobarConfiguracion } from './seguridad';
 import { negocioValido, nombreValido, skuValido, descripcionValida, idValido, montoValido } from './validaciones';
 
@@ -77,11 +78,22 @@ export async function hacerDevolucion(wallet: WalletFirma, connection: Connectio
   return enviar(ix, wallet, connection, opciones);
 }
 
+type ConstructorBaja = (entrada: {
+  owner: ReturnType<typeof createNoopSigner>;
+  registro: Address;
+  cliente: Address;
+  idCliente: number;
+}) => InstruccionKit;
+
 export async function eliminarCliente(wallet: WalletFirma, connection: Connection, nombreNegocio: string, idCliente: number, opciones?: OpcionesEnvio): Promise<string> {
   nombreNegocio = negocioValido(nombreNegocio);
   idCliente = idValido(idCliente);
   const owner = firmante(wallet);
+  const construir = (generado as { getEliminarClienteInstruction?: ConstructorBaja }).getEliminarClienteInstruction;
+  if (typeof construir !== 'function') {
+    throw new Error('El cliente generado no incluye eliminar_cliente. Importa el IDL del día 5 y ejecuta npm run cliente.');
+  }
   const registro = pdaRegistro(nombreNegocio, owner.address);
   const cliente = pdaCliente(registro, idCliente);
-  return enviar(getEliminarClienteInstruction({ owner, registro, cliente, idCliente }), wallet, connection, opciones);
+  return enviar(construir({ owner, registro, cliente, idCliente }), wallet, connection, opciones);
 }

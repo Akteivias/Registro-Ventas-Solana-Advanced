@@ -4,30 +4,49 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { PublicKey } from '@solana/web3.js';
 import type { Connection } from '@solana/web3.js';
-import { address, createNoopSigner } from '@solana/kit';
-import { getRegistrarVentaInstruction, getRegistrarVentaInstructionDataDecoder, getCambiarMontoInstruction, getEliminarClienteInstruction, getEliminarClienteInstructionDataDecoder, REGISTRO_PROGRAM_ADDRESS } from '../clients/js/src/generated';
+import { address, createNoopSigner, type Address } from '@solana/kit';
+import { getRegistrarVentaInstruction, getRegistrarVentaInstructionDataDecoder, getCambiarMontoInstruction, REGISTRO_PROGRAM_ADDRESS } from '../clients/js/src/generated';
+import * as generado from '../clients/js/src/generated';
 import { pdaRegistro, pdaCliente, pdaVenta } from '../src/solana/pdas';
 import { s } from '../src/solana/seeds';
-import { aWeb3, confirmarEnvio, ErrorTransaccion, ErrorConfirmacionPendiente, traducir } from '../src/solana/tx';
+import { aWeb3, confirmarEnvio, ErrorTransaccion, ErrorConfirmacionPendiente, traducir, type InstruccionKit } from '../src/solana/tx';
 import { comprobarDevnet, DEVNET_GENESIS } from '../src/solana/seguridad';
 import { montoValido, skuValido, nombreValido, idValido } from '../src/solana/validaciones';
 import idl from '../idl.json';
+import idlBase5ix from './fixtures/idl-base-5ix.json';
 import { validarIdl, prepararIdl, REFERENCIA_ID } from '../scripts/contrato-idl.mjs';
 
 // Direccion publica de fixture. No se crean wallets ni se envian transacciones.
 const owner = address(new PublicKey(new Uint8Array(32).fill(7)).toBase58());
 
 test('la baja codifica el ID y conserva los permisos de las cuentas', () => {
-  const registro = pdaRegistro('Cafe', owner);
-  for (const idCliente of [1, 256, 65_535]) {
-    const cliente = pdaCliente(registro, idCliente);
-    const ix = getEliminarClienteInstruction({ owner: createNoopSigner(owner), registro, cliente, idCliente });
-    assert.deepEqual(Buffer.from(ix.data.subarray(0, 8)), createHash('sha256').update('global:eliminar_cliente').digest().subarray(0, 8));
-    assert.equal(getEliminarClienteInstructionDataDecoder().decode(ix.data).idCliente, idCliente);
-    assert.deepEqual(aWeb3(ix).keys.map(({ isSigner, isWritable }) => [isSigner, isWritable]), [[true, true], [false, true], [false, true]]);
+  const tieneBaja = idl.instructions.some((item) => item.name.toLowerCase().replace(/_/g, '') === 'eliminarcliente');
+  const mod = generado as {
+    getEliminarClienteInstruction?: (entrada: {
+      owner: ReturnType<typeof createNoopSigner>;
+      registro: Address;
+      cliente: Address;
+      idCliente: number;
+    }) => InstruccionKit;
+    getEliminarClienteInstructionDataDecoder?: () => { decode: (bytes: Uint8Array) => { idCliente: number } };
+  };
+  if (tieneBaja) {
+    assert.equal(typeof mod.getEliminarClienteInstruction, 'function');
+    assert.equal(typeof mod.getEliminarClienteInstructionDataDecoder, 'function');
+    const registro = pdaRegistro('Cafe', owner);
+    for (const idCliente of [1, 256, 65_535]) {
+      const cliente = pdaCliente(registro, idCliente);
+      const ix = mod.getEliminarClienteInstruction!({ owner: createNoopSigner(owner), registro, cliente, idCliente });
+      assert.deepEqual(Buffer.from(ix.data!.subarray(0, 8)), createHash('sha256').update('global:eliminar_cliente').digest().subarray(0, 8));
+      assert.equal(mod.getEliminarClienteInstructionDataDecoder!().decode(ix.data!).idCliente, idCliente);
+      assert.deepEqual(aWeb3(ix).keys.map(({ isSigner, isWritable }) => [isSigner, isWritable]), [[true, true], [false, true], [false, true]]);
+    }
+    assert.match(traducir(new Error('custom program error: 0x1772')), /NoCliente/);
+    assert.match(traducir(new Error('custom program error: 0x1773')), /ClienteConVentas/);
+  } else {
+    assert.equal(mod.getEliminarClienteInstruction, undefined);
+    assert.equal(mod.getEliminarClienteInstructionDataDecoder, undefined);
   }
-  assert.match(traducir(new Error('custom program error: 0x1772')), /NoCliente/);
-  assert.match(traducir(new Error('custom program error: 0x1773')), /ClienteConVentas/);
 });
 
 test('las semillas u16 conservan dos bytes little-endian y sus limites', () => {
@@ -121,4 +140,33 @@ test('se valida el contrato IDL y la normalizacion no cambia el orden ni tipos',
   esquema!.fields.reverse();
   assert.throws(() => validarIdl(otraCuenta), /campos de la cuenta/);
   assert.throws(() => validarIdl(copia, new PublicKey(new Uint8Array(32).fill(9)).toBase58()), /no coinciden/);
+});
+
+test('el contrato IDL acepta el baseline de 5 instrucciones y valida eliminar_cliente cuando existe', () => {
+  assert.equal(idlBase5ix.instructions.length, 5);
+  assert.equal(idlBase5ix.instructions.some((item) => item.name.toLowerCase().replace(/_/g, '') === 'eliminarcliente'), false);
+  const validacionBase = validarIdl(idlBase5ix);
+  assert.equal(validacionBase.programId, REFERENCIA_ID);
+  assert.equal(validacionBase.esReferencia, true);
+  const preparadaBase = prepararIdl(idlBase5ix, REFERENCIA_ID);
+  assert.equal(preparadaBase.instructions.length, 5);
+
+  const conBaja = structuredClone(idlBase5ix) as unknown as {
+    instructions: { name: string; args: { name: string; type: unknown }[] }[];
+  };
+  conBaja.instructions.push({
+    name: 'eliminar_cliente',
+    args: [{ name: '_id_cliente', type: 'u16' }],
+  });
+  assert.equal(validarIdl(conBaja).esReferencia, true);
+  const preparadaConBaja = prepararIdl(conBaja, REFERENCIA_ID);
+  assert.equal(preparadaConBaja.instructions.find((item: { name: string }) => item.name === 'eliminar_cliente').args[0].name, 'id_cliente');
+
+  const malNombreArg = structuredClone(conBaja);
+  malNombreArg.instructions[malNombreArg.instructions.length - 1].args[0].name = 'otro';
+  assert.throws(() => validarIdl(malNombreArg), /argumentos de eliminarcliente/);
+
+  const malTipoArg = structuredClone(conBaja);
+  malTipoArg.instructions[malTipoArg.instructions.length - 1].args[0].type = 'u32';
+  assert.throws(() => validarIdl(malTipoArg), /tipos de los argumentos de eliminarcliente/);
 });

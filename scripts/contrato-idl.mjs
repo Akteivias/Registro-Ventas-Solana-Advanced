@@ -10,10 +10,14 @@ const requeridas = {
   cambiarmonto: ['idcliente', 'sku', 'nuevomonto'],
   hacerdevolucion: ['idcliente', 'sku'],
 };
+const opcionales = {
+  eliminarcliente: ['idcliente'],
+};
 const tiposArgumentos = {
   crearregistro: ['string'], crearcliente: ['string'],
   registrarventa: ['u16', 'string', 'string', 'u32'],
   cambiarmonto: ['u16', 'string', 'u32'], hacerdevolucion: ['u16', 'string'],
+  eliminarcliente: ['u16'],
 };
 const camposEsperados = {
   registro: [['owner', 'pubkey'], ['nombrenegocio', 'string'], ['clientes', 'vec:pubkey'], ['idcounter', 'u16']],
@@ -23,6 +27,19 @@ const camposEsperados = {
 const tipo = (valor) => typeof valor === 'string'
   ? (valor === 'publicKey' ? 'pubkey' : valor)
   : valor?.vec ? 'vec:' + tipo(valor.vec) : JSON.stringify(valor);
+
+function validarArgumentosInstruccion(nombre, instruccion, argumentos) {
+  if (!Array.isArray(instruccion.args)) {
+    throw new Error('Los argumentos de ' + nombre + ' no coinciden con el material del bootcamp.');
+  }
+  const recibidos = instruccion.args.map((item) => normalizar(item.name));
+  if (JSON.stringify(recibidos) !== JSON.stringify(argumentos)) {
+    throw new Error('Los argumentos de ' + nombre + ' no coinciden con el material del bootcamp.');
+  }
+  if (JSON.stringify(instruccion.args.map((item) => tipo(item.type))) !== JSON.stringify(tiposArgumentos[nombre])) {
+    throw new Error('Los tipos de los argumentos de ' + nombre + ' no coinciden con el programa del bootcamp.');
+  }
+}
 
 export function validarIdl(idl, programIdOpcional) {
   if (!idl || typeof idl !== 'object' || !Array.isArray(idl.instructions)) {
@@ -35,13 +52,11 @@ export function validarIdl(idl, programIdOpcional) {
   for (const [nombre, argumentos] of Object.entries(requeridas)) {
     const instruccion = idl.instructions.find((item) => normalizar(item.name) === nombre);
     if (!instruccion || !Array.isArray(instruccion.args)) throw new Error('Falta la instruccion ' + nombre);
-    const recibidos = instruccion.args.map((item) => normalizar(item.name));
-    if (JSON.stringify(recibidos) !== JSON.stringify(argumentos)) {
-      throw new Error('Los argumentos de ' + nombre + ' no coinciden con el material del bootcamp.');
-    }
-    if (JSON.stringify(instruccion.args.map((item) => tipo(item.type))) !== JSON.stringify(tiposArgumentos[nombre])) {
-      throw new Error('Los tipos de los argumentos de ' + nombre + ' no coinciden con el programa del bootcamp.');
-    }
+    validarArgumentosInstruccion(nombre, instruccion, argumentos);
+  }
+  for (const [nombre, argumentos] of Object.entries(opcionales)) {
+    const instruccion = idl.instructions.find((item) => normalizar(item.name) === nombre);
+    if (instruccion) validarArgumentosInstruccion(nombre, instruccion, argumentos);
   }
   for (const cuenta of ['registro', 'cliente', 'venta']) {
     if (!idl.accounts?.some((item) => normalizar(item.name) === cuenta)) {
