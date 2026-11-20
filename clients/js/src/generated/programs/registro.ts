@@ -74,7 +74,7 @@ import {
 import { findClientePda, findRegistroPda, findVentaPda } from "../pdas";
 
 export const REGISTRO_PROGRAM_ADDRESS =
-  "38oTMyvUTmqkBQeMiuok5F2mPjp9dVadWdBeQTDNmTUY" as Address<"38oTMyvUTmqkBQeMiuok5F2mPjp9dVadWdBeQTDNmTUY">;
+  "F4DhinubMRrYQ3zFCKDe8xW4mu8gKFdkXTEKigwKGMht" as Address<"F4DhinubMRrYQ3zFCKDe8xW4mu8gKFdkXTEKigwKGMht">;
 
 export enum RegistroAccount {
   Cliente,
@@ -211,7 +211,7 @@ export function identifyRegistroInstruction(
 }
 
 export type ParsedRegistroInstruction<
-  TProgram extends string = "38oTMyvUTmqkBQeMiuok5F2mPjp9dVadWdBeQTDNmTUY",
+  TProgram extends string = "F4DhinubMRrYQ3zFCKDe8xW4mu8gKFdkXTEKigwKGMht",
 > =
   | ({
       instructionType: RegistroInstruction.CambiarMonto;

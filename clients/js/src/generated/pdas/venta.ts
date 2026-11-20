@@ -27,7 +27,7 @@ export async function findVentaPda(
 ): Promise<ProgramDerivedAddress> {
   const {
     programAddress:
-      programAddressInput = "38oTMyvUTmqkBQeMiuok5F2mPjp9dVadWdBeQTDNmTUY" as Address<"38oTMyvUTmqkBQeMiuok5F2mPjp9dVadWdBeQTDNmTUY">,
+      programAddressInput = "F4DhinubMRrYQ3zFCKDe8xW4mu8gKFdkXTEKigwKGMht" as Address<"F4DhinubMRrYQ3zFCKDe8xW4mu8gKFdkXTEKigwKGMht">,
   } = config;
   const programAddress =
     typeof programAddressInput === "string"
