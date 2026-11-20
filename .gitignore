@@ -11,3 +11,6 @@ dist/
 *-keypair.json
 
 .agents/skills/*
+
+docs/CODEBASE-REVIEW-SWARM.md
+docs/CODEBASE-REVIEW-TEAMWORK.md
