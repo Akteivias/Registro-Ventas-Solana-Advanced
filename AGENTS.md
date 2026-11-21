@@ -130,6 +130,6 @@ Documentation files must be created or updated only when an explicit trigger occ
 
 ### Documentation Guardrails
 * Prefer lowercase `docs/` directories.
-* Do not create `HISTORY.md` (use Git history for commits; `CHANGELOG.md` for releases).
+* Do not create `HISTORY.md` (avoids agent context bloat; use `git log` for commits, `CHANGELOG.md` for releases, and external agent scratch/brain directories for session logs).
 * Cross-link related ADRs, architecture docs, and runbooks instead of duplicating text.
 * When a trigger is met during an implementation task, commit documentation updates in the same atomic changeset and verify all links.
