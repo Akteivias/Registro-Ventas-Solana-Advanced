@@ -40,10 +40,12 @@ When resolving conflicts or deciding implementation details:
 * `npm run cliente`: Regenerates `clients/js/src/generated/` from `idl.json` via Codama.
 * `npm test`: Runs test suite (`node --import tsx --test tests/*.test.ts`).
 * `npm run verificar:devnet`: Runs the headless Devnet test (`tests/dia5-devnet.ts`).
+* `npm run verificar:browser`: Runs headless browser verification (`tests/dia5-browser.ts`) via `chrome-devtools` CLI covering simulated Wallet Standard cancellation, boundary validation, and public read observation.
 
 ### Strict Prohibitions
 * **NEVER run `npm run clase:dia3`, `clase:dia4`, or `clase:resuelto` on active branches:** These scripts copy boilerplate templates from `materiales/` and overwrite active implementation files in `src/solana/`.
-* **DO NOT install heavy browser automation frameworks (Playwright, Puppeteer) into package.json:** Browser inspection is handled externally via Chrome DevTools MCP.
+* **DO NOT install heavy browser automation frameworks (Playwright, Puppeteer) into package.json:** Browser inspection and automated UI checks are handled externally via Chrome DevTools MCP or `chrome-devtools` CLI (`tests/dia5-browser.ts`).
+* **DO NOT modify `docs/PRUEBAS-AUTOMATIZADAS.md` during bug-fixing turns:** Treat it as the durable human/agent specification. Never edit it (or soften test assertions) to make a failing test pass; only update it in Phase 3 when the UI contract, protocol, or Devnet evidence intentionally changes.
 * **DO NOT write temporary or test files into `/tmp`:** Keep all files, test fixtures, and scripts inside the repository or the agent scratch directory (`scratch/`). Do not scatter files in global OS temp directories.
 
 ---
@@ -95,6 +97,14 @@ Agents verifying browser functionality must use the patterns established in `doc
 * Use the Wallet Standard registration event (`wallet-standard:app-ready`) injected via `initScript` in `navigate_page`.
 * For signature tests, route signing requests through an ephemeral local Node bridge that holds the external test keypair, validates compiled transaction instructions against expected PDAs and blockhash, and partial-signs outside the page.
 * Clean up by navigating test tabs to `about:blank` and terminating only the temporary Vite and Node processes.
+
+### 3. Inner-Loop vs. Spec Verification (3-Phase Rule)
+To balance speed with specification integrity, agents MUST separate specification reading from inner-loop test execution:
+1. **Phase 1 (Macro Intent — Before Coding):** Read `docs/PRUEBAS-AUTOMATIZADAS.md` (and Section 3 above) to understand protocol invariants and acceptance criteria.
+2. **Phase 2 (Inner Loop — During Coding):** Run `fnm exec --using=24 npm run verificar:browser` for fast, deterministic regression checks. If an assertion fails, **fix the application code (`src/`)**—never soften test assertions or edit `docs/PRUEBAS-AUTOMATIZADAS.md` to make a failing test pass. Use Chrome DevTools MCP interactively only when debugging an unexpected failure.
+3. **Phase 3 (Documentation Sync — After Completion):**
+   * Bug fixes or internal refactors: Leave `docs/PRUEBAS-AUTOMATIZADAS.md` unchanged (zero churn).
+   * Intentional UI, protocol, or Devnet evidence changes: Update `tests/dia5-browser.ts` and `docs/PRUEBAS-AUTOMATIZADAS.md` in the same changeset.
 
 ---
 
