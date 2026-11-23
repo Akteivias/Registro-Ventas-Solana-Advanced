@@ -19,9 +19,9 @@ Son medidas de esta aplicación. Un cliente diferente puede omitir sus validacio
 
 ## Límites que debemos reconocer en clase
 
-El programa Rust se incluye sin modificar respecto a la referencia del bootcamp. `#[max_len]` se utiliza para calcular el espacio reservado: no es una validación explícita de longitud o capacidad de negocio.
+El programa Rust parte de la referencia del bootcamp e incorpora la validación en cadena de montos positivos (`Errores::MontoInvalido` en `registrar_venta` y `cambiar_monto`). `#[max_len]` se utiliza para calcular el espacio reservado: no es una validación explícita de longitud o capacidad de negocio.
 
-El diseño reserva espacio para hasta 10 referencias de clientes en Registro y 10 de ventas activas en Cliente. La app evita crear más clientes en el flujo normal y valida tamaños de texto, pero el programa no ofrece todavía errores de negocio claros para todos los límites ni valida todos los valores positivos. Algunas entradas que evita el formulario pueden fallar por serialización o ser aceptadas desde otro cliente.
+El diseño reserva espacio para hasta 10 referencias de clientes en Registro y 10 de ventas activas en Cliente. La app evita crear más clientes en el flujo normal y valida tamaños de texto, pero el programa no ofrece todavía errores de negocio claros para todos los límites de capacidad o longitud. Algunas entradas que evita el formulario pueden fallar por serialización o ser aceptadas desde otro cliente.
 
 Otros puntos: capacidad fija, contador de cliente calculado a partir del estado (puede haber concurrencia), importe sin moneda ni decimales, sin pagos reales, sin privacidad de datos onchain y sin indexador. `compras` indica ventas activas, no el total histórico de compras; la devolución cierra la cuenta de la venta.
 

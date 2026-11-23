@@ -1,58 +1,135 @@
 {
-  "version": "0.1.0",
-  "name": "registro",
+  "address": "F4DhinubMRrYQ3zFCKDe8xW4mu8gKFdkXTEKigwKGMht",
   "metadata": {
-    "address": "38oTMyvUTmqkBQeMiuok5F2mPjp9dVadWdBeQTDNmTUY"
+    "name": "registro",
+    "version": "0.1.0",
+    "spec": "0.1.0"
   },
   "instructions": [
     {
-      "name": "crearRegistro",
+      "name": "cambiar_monto",
+      "discriminator": [
+        138,
+        26,
+        77,
+        29,
+        234,
+        177,
+        71,
+        94
+      ],
       "accounts": [
         {
           "name": "owner",
-          "isMut": true,
-          "isSigner": true
+          "signer": true,
+          "relations": [
+            "registro"
+          ]
         },
         {
-          "name": "registro",
-          "isMut": true,
-          "isSigner": false
+          "name": "registro"
         },
         {
-          "name": "systemProgram",
-          "isMut": false,
-          "isSigner": false
+          "name": "cliente",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  108,
+                  105,
+                  101,
+                  110,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "registro"
+              },
+              {
+                "kind": "arg",
+                "path": "id_cliente"
+              }
+            ]
+          }
+        },
+        {
+          "name": "venta",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  101,
+                  110,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "cliente"
+              },
+              {
+                "kind": "arg",
+                "path": "sku"
+              }
+            ]
+          }
         }
       ],
       "args": [
         {
-          "name": "nombreNegocio",
+          "name": "_id_cliente",
+          "type": "u16"
+        },
+        {
+          "name": "sku",
           "type": "string"
+        },
+        {
+          "name": "nuevo_monto",
+          "type": "u32"
         }
       ]
     },
     {
-      "name": "crearCliente",
+      "name": "crear_cliente",
+      "discriminator": [
+        55,
+        98,
+        61,
+        156,
+        15,
+        134,
+        174,
+        95
+      ],
       "accounts": [
         {
           "name": "owner",
-          "isMut": true,
-          "isSigner": true
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "registro"
+          ]
         },
         {
           "name": "registro",
-          "isMut": true,
-          "isSigner": false
+          "writable": true
         },
         {
           "name": "cliente",
-          "isMut": true,
-          "isSigner": false
+          "writable": true
         },
         {
-          "name": "systemProgram",
-          "isMut": false,
-          "isSigner": false
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -63,37 +140,301 @@
       ]
     },
     {
-      "name": "registrarVenta",
+      "name": "crear_registro",
+      "discriminator": [
+        93,
+        45,
+        68,
+        224,
+        227,
+        244,
+        209,
+        54
+      ],
       "accounts": [
         {
           "name": "owner",
-          "isMut": true,
-          "isSigner": true
+          "writable": true,
+          "signer": true
         },
         {
           "name": "registro",
-          "isMut": false,
-          "isSigner": false
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  101,
+                  103,
+                  105,
+                  115,
+                  116,
+                  114,
+                  111
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "nombre_negocio"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
         },
         {
-          "name": "cliente",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "venta",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "systemProgram",
-          "isMut": false,
-          "isSigner": false
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "idCliente",
+          "name": "nombre_negocio",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "eliminar_cliente",
+      "discriminator": [
+        205,
+        132,
+        251,
+        133,
+        247,
+        51,
+        204,
+        55
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "registro"
+          ]
+        },
+        {
+          "name": "registro",
+          "writable": true
+        },
+        {
+          "name": "cliente",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  108,
+                  105,
+                  101,
+                  110,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "registro"
+              },
+              {
+                "kind": "arg",
+                "path": "id_cliente"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "_id_cliente",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "hacer_devolucion",
+      "discriminator": [
+        65,
+        193,
+        244,
+        124,
+        210,
+        201,
+        110,
+        191
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "registro"
+          ]
+        },
+        {
+          "name": "registro"
+        },
+        {
+          "name": "cliente",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  108,
+                  105,
+                  101,
+                  110,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "registro"
+              },
+              {
+                "kind": "arg",
+                "path": "id_cliente"
+              }
+            ]
+          }
+        },
+        {
+          "name": "venta",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  101,
+                  110,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "cliente"
+              },
+              {
+                "kind": "arg",
+                "path": "sku"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "_id_cliente",
+          "type": "u16"
+        },
+        {
+          "name": "sku",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "registrar_venta",
+      "discriminator": [
+        47,
+        95,
+        122,
+        187,
+        82,
+        62,
+        119,
+        131
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "registro"
+          ]
+        },
+        {
+          "name": "registro"
+        },
+        {
+          "name": "cliente",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  108,
+                  105,
+                  101,
+                  110,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "registro"
+              },
+              {
+                "kind": "arg",
+                "path": "id_cliente"
+              }
+            ]
+          }
+        },
+        {
+          "name": "venta",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  101,
+                  110,
+                  116,
+                  97
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "cliente"
+              },
+              {
+                "kind": "arg",
+                "path": "sku"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "_id_cliente",
           "type": "u16"
         },
         {
@@ -109,116 +450,84 @@
           "type": "u32"
         }
       ]
-    },
-    {
-      "name": "hacerDevolucion",
-      "accounts": [
-        {
-          "name": "owner",
-          "isMut": true,
-          "isSigner": true
-        },
-        {
-          "name": "registro",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "cliente",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "venta",
-          "isMut": true,
-          "isSigner": false
-        }
-      ],
-      "args": [
-        {
-          "name": "idCliente",
-          "type": "u16"
-        },
-        {
-          "name": "sku",
-          "type": "string"
-        }
-      ]
-    },
-    {
-      "name": "cambiarMonto",
-      "accounts": [
-        {
-          "name": "owner",
-          "isMut": false,
-          "isSigner": true
-        },
-        {
-          "name": "registro",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "cliente",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "venta",
-          "isMut": true,
-          "isSigner": false
-        }
-      ],
-      "args": [
-        {
-          "name": "idCliente",
-          "type": "u16"
-        },
-        {
-          "name": "sku",
-          "type": "string"
-        },
-        {
-          "name": "nuevoMonto",
-          "type": "u32"
-        }
-      ]
     }
   ],
   "accounts": [
     {
-      "name": "Registro",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "owner",
-            "type": "publicKey"
-          },
-          {
-            "name": "nombreNegocio",
-            "type": "string"
-          },
-          {
-            "name": "clientes",
-            "type": {
-              "vec": "publicKey"
-            }
-          },
-          {
-            "name": "idCounter",
-            "type": "u16"
-          }
-        ]
-      }
+      "name": "Cliente",
+      "discriminator": [
+        126,
+        253,
+        118,
+        23,
+        130,
+        179,
+        29,
+        228
+      ]
     },
+    {
+      "name": "Registro",
+      "discriminator": [
+        80,
+        44,
+        41,
+        67,
+        32,
+        150,
+        85,
+        243
+      ]
+    },
+    {
+      "name": "Venta",
+      "discriminator": [
+        46,
+        19,
+        228,
+        71,
+        14,
+        149,
+        86,
+        78
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "NoOwner",
+      "msg": "Error, no eres el owner del registro"
+    },
+    {
+      "code": 6001,
+      "name": "NoSKU",
+      "msg": "Error, la venta no esta en el historial del cliente"
+    },
+    {
+      "code": 6002,
+      "name": "NoCliente",
+      "msg": "Error, el cliente no esta en el registro"
+    },
+    {
+      "code": 6003,
+      "name": "ClienteConVentas",
+      "msg": "Error, el cliente tiene ventas activas"
+    },
+    {
+      "code": 6004,
+      "name": "MontoInvalido",
+      "msg": "Error, el monto debe ser mayor que cero"
+    }
+  ],
+  "types": [
     {
       "name": "Cliente",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "idCliente",
+            "name": "id_cliente",
             "type": "u16"
           },
           {
@@ -232,8 +541,34 @@
           {
             "name": "historial",
             "type": {
-              "vec": "publicKey"
+              "vec": "pubkey"
             }
+          }
+        ]
+      }
+    },
+    {
+      "name": "Registro",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "owner",
+            "type": "pubkey"
+          },
+          {
+            "name": "nombre_negocio",
+            "type": "string"
+          },
+          {
+            "name": "clientes",
+            "type": {
+              "vec": "pubkey"
+            }
+          },
+          {
+            "name": "id_counter",
+            "type": "u16"
           }
         ]
       }
@@ -257,18 +592,6 @@
           }
         ]
       }
-    }
-  ],
-  "errors": [
-    {
-      "code": 6000,
-      "name": "NoOwner",
-      "msg": "Error, no eres el owner del registro"
-    },
-    {
-      "code": 6001,
-      "name": "NoSKU",
-      "msg": "Error, la venta no esta en el historial del cliente"
     }
   ]
 }

@@ -16,6 +16,9 @@
     "clase:resuelto": "node scripts/preparar-clase.mjs resuelto",
     "verificar": "npm run typecheck && npm test && npm run build",
     "comprobar:idl": "node scripts/verificar-contrato.mjs",
+    "verificar:devnet": "node --import tsx tests/dia5-devnet.ts",
+    "verificar:browser": "node --import tsx tests/dia5-browser.ts",
+    "verificar:browser:devnet": "node --import tsx tests/dia5-browser-devnet.ts",
     "prebuild": "npm run comprobar:idl",
     "predev": "npm run comprobar:idl"
   },

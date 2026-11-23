@@ -202,6 +202,13 @@ async function cambiarMonto(nombre_negocio, id_cliente, sku, nuevo_monto) {
 }
 
 //////////////////// Ver Clientes ////////////////////
+async function eliminarCliente(nombre_negocio, id_cliente) {
+  const { registro, cliente } = cadena(nombre_negocio, id_cliente, "");
+  const txHash = await pg.program.methods.eliminarCliente(id_cliente)
+    .accounts({ owner, registro, cliente }).rpc();
+  console.log("txHash: ", txHash);
+}
+
 /*
 Cada cliente y cada venta son cuentas independientes: el registro no guarda sus datos, guarda sus
 DIRECCIONES. Por eso hay que ir a buscar cada una desde el cliente, lo que es mas eficiente que

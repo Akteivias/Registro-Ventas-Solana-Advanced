@@ -6,7 +6,7 @@ El IDL describe las instrucciones, sus argumentos y las estructuras de cuentas d
 
 Exporta el IDL del mismo código que se compiló y desplegó en Devnet. El proyecto admite el formato legacy de Anchor y el formato moderno con `address`, discriminadores y definiciones en `types`, siempre que describan el modelo del bootcamp.
 
-El IDL incluido procede del material de referencia de David y utiliza la dirección `38oTMyvUTmqkBQeMiuok5F2mPjp9dVadWdBeQTDNmTUY`. Sirve para generar y estudiar el cliente. No se presupone que sea tu despliegue ni que esté disponible: el proyecto bloquea sus operaciones del registro.
+El IDL incluido originalmente en la plantilla procede del material de referencia de David y utiliza la dirección `38oTMyvUTmqkBQeMiuok5F2mPjp9dVadWdBeQTDNmTUY`. Sirve para generar y estudiar el cliente. No se presupone que sea tu despliegue ni que esté disponible: el proyecto bloquea sus operaciones del registro. *(En `entrega/initial`, `idl.json` y `src/config/programa.json` ya están importados para `F4DhinubMRrYQ3zFCKDe8xW4mu8gKFdkXTEKigwKGMht` e incluyen `eliminar_cliente` y `Errores::MontoInvalido` (`6004`).)*
 
 ## Contrato que espera la app
 

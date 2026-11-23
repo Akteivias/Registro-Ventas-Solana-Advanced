@@ -24,7 +24,28 @@ const tipo = (valor) => typeof valor === 'string'
   ? (valor === 'publicKey' ? 'pubkey' : valor)
   : valor?.vec ? 'vec:' + tipo(valor.vec) : JSON.stringify(valor);
 
-export function validarIdl(idl, programIdOpcional) {
+const entregaFinalInstrucciones = {
+  eliminarcliente: ['idcliente'],
+};
+const entregaFinalTipos = {
+  eliminarcliente: ['u16'],
+};
+
+function validarGrupoInstrucciones(idl, mapaArgs, mapaTipos) {
+  for (const [nombre, argumentos] of Object.entries(mapaArgs)) {
+    const instruccion = idl.instructions.find((item) => normalizar(item.name) === nombre);
+    if (!instruccion || !Array.isArray(instruccion.args)) throw new Error('Falta la instruccion ' + nombre);
+    const recibidos = instruccion.args.map((item) => normalizar(item.name));
+    if (JSON.stringify(recibidos) !== JSON.stringify(argumentos)) {
+      throw new Error('Los argumentos de ' + nombre + ' no coinciden con el material del bootcamp.');
+    }
+    if (JSON.stringify(instruccion.args.map((item) => tipo(item.type))) !== JSON.stringify(mapaTipos[nombre])) {
+      throw new Error('Los tipos de los argumentos de ' + nombre + ' no coinciden con el programa del bootcamp.');
+    }
+  }
+}
+
+export function validarIdl(idl, programIdOpcional, opciones = {}) {
   if (!idl || typeof idl !== 'object' || !Array.isArray(idl.instructions)) {
     throw new Error('El archivo no tiene la estructura de un IDL de Anchor.');
   }
@@ -32,17 +53,7 @@ export function validarIdl(idl, programIdOpcional) {
   if (normalizar(nombres) !== 'registro') {
     throw new Error('Este frontend espera el programa registro del bootcamp.');
   }
-  for (const [nombre, argumentos] of Object.entries(requeridas)) {
-    const instruccion = idl.instructions.find((item) => normalizar(item.name) === nombre);
-    if (!instruccion || !Array.isArray(instruccion.args)) throw new Error('Falta la instruccion ' + nombre);
-    const recibidos = instruccion.args.map((item) => normalizar(item.name));
-    if (JSON.stringify(recibidos) !== JSON.stringify(argumentos)) {
-      throw new Error('Los argumentos de ' + nombre + ' no coinciden con el material del bootcamp.');
-    }
-    if (JSON.stringify(instruccion.args.map((item) => tipo(item.type))) !== JSON.stringify(tiposArgumentos[nombre])) {
-      throw new Error('Los tipos de los argumentos de ' + nombre + ' no coinciden con el programa del bootcamp.');
-    }
-  }
+  validarGrupoInstrucciones(idl, requeridas, tiposArgumentos);
   for (const cuenta of ['registro', 'cliente', 'venta']) {
     if (!idl.accounts?.some((item) => normalizar(item.name) === cuenta)) {
       throw new Error('Falta el tipo de cuenta ' + cuenta);
@@ -65,7 +76,16 @@ export function validarIdl(idl, programIdOpcional) {
   if (programIdOpcional && (idl.address ?? idl.metadata?.address) && programId !== (idl.address ?? idl.metadata?.address)) {
     throw new Error('El --program-id y la direccion del IDL no coinciden. Exporta el IDL correcto.');
   }
-  return { programId, esReferencia: programId === REFERENCIA_ID };
+  const esReferencia = programId === REFERENCIA_ID;
+  const exigirEntregaFinal = opciones.exigirEntregaFinal ?? !esReferencia;
+  if (exigirEntregaFinal) {
+    validarGrupoInstrucciones(idl, entregaFinalInstrucciones, entregaFinalTipos);
+    const hasMontoInvalido = idl.errors?.some((item) => item.code === 6004 && item.name === 'MontoInvalido') ?? false;
+    if (!hasMontoInvalido) {
+      throw new Error('Falta el error MontoInvalido (6004) en el IDL de entrega final.');
+    }
+  }
+  return { programId, esReferencia };
 }
 
 export function prepararIdl(idl, programId) {
