@@ -8,13 +8,13 @@ Forma parte del **Solana Engineering Track: Advanced** de WayLearn. Aquí conect
 
 ## Proyecto final: Registro de ventas
 
-- **Ruta y punto de partida:** Proyecto guiado (*Registro de ventas*) sobre [`Akteivias/Registro-Ventas-Solana-Advanced`](https://github.com/Akteivias/Registro-Ventas-Solana-Advanced) (rama `entrega/initial`), partiendo de `clase/resuelto` (`9abfc13`) y de los repositorios de referencia [`WayLearnLatam/Registro-Ventas-Solana-App`](https://github.com/WayLearnLatam/Registro-Ventas-Solana-App) y [`WayLearnLatam/Registro-Ventas-Solana-PDA`](https://github.com/WayLearnLatam/Registro-Ventas-Solana-PDA).
-- **Base del Día 5 y aporte funcional:** Conserva la baja de clientes sin ventas activas (`eliminar_cliente`, manteniendo `id_counter`) y añade validación de montos positivos (`monto > 0` en `registrar_venta` y `nuevo_monto > 0` en `cambiar_monto`, error `MontoInvalido` `6004` / `0x1774`).
+- **Ruta y punto de partida:** Proyecto guiado (*Registro de ventas*) en [`Akteivias/Registro-Ventas-Solana-Advanced`](https://github.com/Akteivias/Registro-Ventas-Solana-Advanced), partiendo de `clase/resuelto` (`9abfc13`) y de los repositorios de referencia [`WayLearnLatam/Registro-Ventas-Solana-App`](https://github.com/WayLearnLatam/Registro-Ventas-Solana-App) y [`WayLearnLatam/Registro-Ventas-Solana-PDA`](https://github.com/WayLearnLatam/Registro-Ventas-Solana-PDA).
+- **Base del Día 5 y aporte funcional:** Conserva la baja de clientes sin ventas activas (`eliminar_cliente`, manteniendo `id_counter`) y añade validación en cadena de montos positivos (`monto > 0` en `registrar_venta` y `nuevo_monto > 0` en `cambiar_monto` mediante `Errores::MontoInvalido`, `6004` / `0x1774`).
 - **Artefactos entregados:** [programa Rust](./programa/src/lib.rs), [IDL](./idl.json), [configuración de programa](./src/config/programa.json), [cliente generado](./clients/js/src/generated/) y [frontend](./src/).
-- **Programa en Devnet y evidencias:** [`F4DhinubMRrYQ3zFCKDe8xW4mu8gKFdkXTEKigwKGMht`](https://explorer.solana.com/address/F4DhinubMRrYQ3zFCKDe8xW4mu8gKFdkXTEKigwKGMht?cluster=devnet). Consulta [pruebas y evidencias](./docs/PRUEBAS-Y-EVIDENCIAS.md) para los 8 casos guiados y los casos positivo y de rechazo con monto cero, y el [detalle del aporte y la verificación](#detalle-del-aporte-y-verificación).
+- **Programa en Devnet y evidencias:** [`F4DhinubMRrYQ3zFCKDe8xW4mu8gKFdkXTEKigwKGMht`](https://explorer.solana.com/address/F4DhinubMRrYQ3zFCKDe8xW4mu8gKFdkXTEKigwKGMht?cluster=devnet). Consulta [pruebas y evidencias](./docs/PRUEBAS-Y-EVIDENCIAS.md) para los 8 casos guiados, las pruebas de monto cero y el registro de despliegue, y el [runbook de despliegue y verificación](./docs/runbooks/despliegue-y-verificacion-devnet.md) para compilación SBF y operación en Devnet.
 - **Configuración, verificación y recorrido:** [Codespaces](#comenzar-con-codespaces), [ejecución local](#ejecutar-en-tu-computadora), [comandos de prueba](#probar-tus-cambios), recorrido sin extensión ([`PRUEBAS-AUTOMATIZADAS.md`](./docs/PRUEBAS-AUTOMATIZADAS.md)) y guía manual ([`PRUEBAS-MANUALES.md`](./docs/PRUEBAS-MANUALES.md)).
 
-> ℹ️ Las pruebas de navegador incluidas se realizaron sin extensión de wallet (wallet simulada y firmante local temporal); consulta los límites completos en [`PRUEBAS-Y-EVIDENCIAS.md`](./docs/PRUEBAS-Y-EVIDENCIAS.md) y en el [detalle del aporte y la verificación](#detalle-del-aporte-y-verificación).
+> ℹ️ Las pruebas automatizadas de navegador incluidas se realizaron sin extensión de wallet (wallet simulada y firmante local temporal); consulta los límites y la evidencia completa en [`PRUEBAS-Y-EVIDENCIAS.md`](./docs/PRUEBAS-Y-EVIDENCIAS.md) y [`PRUEBAS-AUTOMATIZADAS.md`](./docs/PRUEBAS-AUTOMATIZADAS.md).
 
 ### Recorrido de la entrega
 
@@ -61,7 +61,7 @@ Haz clic en **Fork**, en la parte superior de este repositorio, para crear una c
 
 ### 2. Abre el entorno
 
-Desde tu copia, selecciona la rama de la entrega y después **Code → Codespaces → Create codespace**. La rama actual de la entrega es `entrega/initial`.
+Desde tu copia, selecciona la rama `main` y después **Code → Codespaces → Create codespace**.
 
 Espera a que termine la preparación. El contenedor incluye Node 22 y ejecuta automáticamente la instalación de dependencias y la generación del cliente.
 
@@ -83,10 +83,10 @@ Abre la aplicación en una pestaña normal del navegador donde tienes instalada 
 
 ## Ejecutar en tu computadora
 
-Si prefieres trabajar en local, utiliza **Node.js 22.12 o superior y menor que 25** y npm. Clona la rama de la entrega:
+Si prefieres trabajar en local, utiliza **Node.js 22.12 o superior y menor que 25** y npm. Clona el repositorio en su rama `main`:
 
 ```bash
-git clone --branch entrega/initial https://github.com/Akteivias/Registro-Ventas-Solana-Advanced.git
+git clone --branch main https://github.com/Akteivias/Registro-Ventas-Solana-Advanced.git
 cd Registro-Ventas-Solana-Advanced
 npm ci
 npm run cliente
@@ -166,17 +166,6 @@ Detén `npm run dev` antes de cambiar de modo y vuelve a iniciarlo al terminar.
 
 La base utiliza **React + Vite**, **TypeScript**, **Wallet Adapter**, **Solana Kit**, **web3.js** y **Codama**. La integración entre las librerías ya está preparada para que puedas concentrarte en el flujo de cuentas e instrucciones.
 
-## Detalle del aporte y verificación
-
-- **Ruta elegida:** Proyecto guiado (*Registro de ventas*) basado en [`WayLearnLatam/Registro-Ventas-Solana-App`](https://github.com/WayLearnLatam/Registro-Ventas-Solana-App) y el programa [`WayLearnLatam/Registro-Ventas-Solana-PDA`](https://github.com/WayLearnLatam/Registro-Ventas-Solana-PDA). El punto de partida de esta entrega es la rama `clase/resuelto` de este repositorio, commit `9abfc13` (este repositorio no incluye un archivo `LICENSE` separado).
-- **Mejora implementada (`programa/src/lib.rs`):** Validación en cadena de montos positivos (`monto > 0` en `registrar_venta` y `nuevo_monto > 0` en `cambiar_monto`) mediante `Errores::MontoInvalido` (`6004` / `0x1774`), preservando las cuentas, semillas PDA, comportamiento positivo y códigos `6000..6003`.
-- **Estado de verificación y despliegue:**
-  - **Despliegue final en Devnet:** Programa `F4DhinubMRrYQ3zFCKDe8xW4mu8gKFdkXTEKigwKGMht` actualizado mediante `scripts/desplegar-devnet.mjs --upgrade` ([tx de upgrade](https://explorer.solana.com/tx/2PMQQHDVbdiCmtvYfaxyRpwovzmUeNVbXS7QjtufgFYTCH8PT56EL8viMoPN8fkGu92eqsr97afkq9brGfbXZyEF?cluster=devnet), slot `524962328`), con `idl.json`, `src/config/programa.json` (`idlSha256: 078c89e157973aa4aea27b769ee3ab469f3d838272f11332b761f0fafa87020c`) y `clients/js/src/generated/` sincronizados.
-  - **Evidencia final-versión:** Los 8 casos guiados y los casos positivo y de rechazo del aporte (`MontoInvalido` en `registrar_venta` y `cambiar_monto`, incluidas las dos transacciones de fallo esperado finalizadas y sus límites de snapshot) están registrados en [PRUEBAS-Y-EVIDENCIAS.md](./docs/PRUEBAS-Y-EVIDENCIAS.md). [DIA-5-VALIDACION.md](./docs/DIA-5-VALIDACION.md) se conserva como evidencia histórica del Día 5, mientras [PRUEBAS-AUTOMATIZADAS.md](./docs/PRUEBAS-AUTOMATIZADAS.md) conserva esa historia y documenta por separado el procedimiento posterior al upgrade.
-  - **Local (compilación + validador aislado):** `fnm exec --using=24 node scripts/probar-local.mjs` compila el programa actualizado, importa el IDL generado en una copia aislada (`.aula/local-runs/`), regenera el cliente Codama sin editarlo a mano, ejecuta `comprobar:idl`, `typecheck`, `npm test` (incluyendo traducción de `0x1774`) y valida en `solana-test-validator` los casos positivos y el rechazo en preflight con monto `0` sin mutar las cuentas de negocio. (En `registrar_venta`, Anchor ejecuta `#[account(init)]` antes de la comprobación `require!` del handler, y cualquier transacción rechazada revierte la inicialización y los cambios de cuenta.)
-  - **Compilación SBF + IDL sin desplegar (revisión independiente):** `NO_DNA=1 fnm exec --using=24 node scripts/desplegar-devnet.mjs --solo-build --program-id F4DhinubMRrYQ3zFCKDe8xW4mu8gKFdkXTEKigwKGMht --out-dir .aula/local-runs/solo-build-out --work-dir .aula/local-runs/solo-build-work` compila `programa/src/lib.rs` usando `tests/fixtures/registro-Cargo.lock`, `anchor-cli 1.2.2`, `solana-cli 4.1.2` (`cargo-build-sbf --tools-version v1.57 --arch v3`), `cargo 1.99.1` y acceso a GitHub (o caché local de Cargo) para `anchor-lang`. Usa rutas distintas bajo `.aula/local-runs/` (ignorado por Git): `--out-dir` debe estar vacío o no existir y conserva `registro.so` e `idl.json`, mientras `--work-dir` aloja y limpia la subcarpeta temporal `dia5-devnet-build-*`. Distingue tres niveles: (1) la compilación observada en el entorno original (`soBytes: 198144`, `soSha256: 77fad2...`, `idlSha256: 078c89...`), (2) una recompilación futura desde la copia entregada y (3) la comparación binaria frente al programa desplegado en Devnet, que requiere descargar el binario desplegado (`solana program dump`) y compararlo contra una compilación verificable/determinista (las compilaciones locales con `cargo-build-sbf` no garantizan hashes idénticos entre máquinas, y los hashes de `.so` e `idl.json` describen artefactos distintos). Consulta el [runbook de despliegue y verificación](./docs/runbooks/despliegue-y-verificacion-devnet.md).
-  - **Alcance no verificado:** La entrega utiliza pruebas sin extensión de navegador (`Offline Test Wallet` y firmante temporal programático), por lo que las ventanas de aprobación de extensiones reales (Phantom/Solflare), las pruebas de interrupción/reinicio en vivo del firmante temporal sobre Devnet, la comparación binaria mediante `solana program dump` y la reejecución en un clon limpio tras este ajuste documental permanecen fuera de la evidencia actual.
-
 ## Probar tus cambios
 
 ```bash
@@ -188,7 +177,7 @@ DEVNET_EXPECTED_AUTHORITY=TU_PUBKEY_DEVNET DEVNET_AUTHORITY_KEYPAIR=~/.config/so
 fnm exec --using=24 node scripts/probar-local.mjs
 ```
 
-Un revisor independiente puede inspeccionar los enlaces públicos de Devnet Explorer sin wallet ni claves, y ejecutar `comprobar:idl`, `verificar` y `verificar:browser` sin el keypair del autor; las escrituras opcionales en Devnet (`verificar:devnet` y `verificar:browser:devnet`, que acepta `--grabar <ruta.mp4>` y `--explorer` para registrar el recorrido completo y visitar Explorer tras cerrar el firmante) requieren su propio keypair externo con saldo (`>= 0.03 SOL`) y `DEVNET_AUTHORITY_KEYPAIR` / `DEVNET_EXPECTED_AUTHORITY`. `npm run verificar` comprueba TypeScript, ejecuta las pruebas unitarias y genera el build del frontend (`dist/`). `npm run verificar:browser` comprueba la cancelación de firma con una wallet simulada offline, validación de formulario (`idCliente = 0` y bloqueo HTML5 de `monto = 0` + control positivo `monto = 1` en *Registrar venta* y *Corregir importe*) y una lectura pública en Devnet; no firma ni envía transacciones en Devnet ni sustituye una extensión de wallet real. El procedimiento repetible sin extensión mediante firmante local temporal (y sus registros históricos del Día 5 más el recorrido post-upgrade `DevnetZ0-ri6q6g`) está documentado en [PRUEBAS-AUTOMATIZADAS.md](./docs/PRUEBAS-AUTOMATIZADAS.md). `scripts/probar-local.mjs` verifica el programa Rust compilado en un validador local efímero sin alterar la configuración Devnet del workspace real. Para el recorrido en Devnet, consulta [pruebas manuales en Devnet](./docs/PRUEBAS-MANUALES.md).
+Un revisor independiente puede inspeccionar los enlaces públicos de Devnet Explorer sin wallet y ejecutar `comprobar:idl`, `verificar` (TypeScript, pruebas unitarias y build) y `verificar:browser` (wallet simulada offline, validaciones UI y lectura pública en Devnet) sin llaves privadas. Las escrituras opcionales en Devnet (`verificar:devnet` y `verificar:browser:devnet`, que acepta `--grabar` y `--explorer`) requieren un keypair externo propio con saldo (`>= 0.03 SOL`) y `DEVNET_AUTHORITY_KEYPAIR` / `DEVNET_EXPECTED_AUTHORITY`. `scripts/probar-local.mjs` compila y valida el programa en un validador local efímero. Para los detalles de pruebas automatizadas, compilación SBF sin desplegar (`--solo-build`) y pruebas manuales con extensión, consulta [PRUEBAS-AUTOMATIZADAS.md](./docs/PRUEBAS-AUTOMATIZADAS.md), el [runbook de despliegue](./docs/runbooks/despliegue-y-verificacion-devnet.md) y [PRUEBAS-MANUALES.md](./docs/PRUEBAS-MANUALES.md).
 
 Para tu primera prueba, crea un negocio, agrega un cliente, registra una venta y consulta el resultado. Después prueba corregir el importe, devolver la venta y cancelar una solicitud de firma.
 
