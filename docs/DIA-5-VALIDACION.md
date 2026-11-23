@@ -2,7 +2,7 @@
 
 La instrucción exige la autoridad del registro, la PDA y la presencia del cliente en el índice. Solo cierra la cuenta cuando tanto `compras` como `historial` están vacíos; elimina su referencia sin modificar `id_counter`. Los lamports de la cuenta vuelven al owner.
 
-## Estado actual de la configuración (Devnet importado)
+## Estado histórico de configuración (validación del Día 5)
 
 - `src/config/programa.json` ya **no** está en modo referencia (`"esReferencia": false`): apunta al despliegue en Devnet `F4DhinubMRrYQ3zFCKDe8xW4mu8gKFdkXTEKigwKGMht` con `"origen": "IDL importado por el participante."` e `"idlSha256": "064d605932a97db706a4396310dc87287ee0bed30b1bdc2f8881af73f3094596"`.
 - `idl.json` procede de la compilación y extracción de IDL (`anchor idl build -- --locked`) correspondientes a ese despliegue en Devnet, y `clients/js/src/generated/**` fue regenerado con Codama a partir de ese IDL.

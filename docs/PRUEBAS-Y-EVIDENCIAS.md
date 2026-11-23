@@ -1,0 +1,75 @@
+# Pruebas y evidencias — Entrega final (*Registro de ventas*)
+
+Registro de evidencias correspondiente a la versión final del programa actualizado en Devnet con la regla de validación de montos positivos (`Errores::MontoInvalido`, código `6004` / `0x1774`).
+
+> **Separación respecto a evidencia histórica del Día 5:** Los documentos [`DIA-5-VALIDACION.md`](./DIA-5-VALIDACION.md) y [`PRUEBAS-AUTOMATIZADAS.md`](./PRUEBAS-AUTOMATIZADAS.md) conservan el registro histórico de la versión base del Día 5. Todas las pruebas de esta página corresponden a la versión actualizada tras el upgrade en Devnet.
+
+---
+
+## 1. Versión y despliegue final en Devnet
+
+- **Program ID (Devnet):** `F4DhinubMRrYQ3zFCKDe8xW4mu8gKFdkXTEKigwKGMht` ([Explorer](https://explorer.solana.com/address/F4DhinubMRrYQ3zFCKDe8xW4mu8gKFdkXTEKigwKGMht?cluster=devnet))
+- **ProgramData:** `96CMogcrH9iAek5nnxKHcufnZBheY7a4smy6XvLsggqs`
+- **Upgrade Authority (keypair externo):** `A8dR6DpBnipYr7Rgi3pLA3ARM3sCAocbwvTmcjEfjb8t`
+- **Transacción de upgrade:** `2PMQQHDVbdiCmtvYfaxyRpwovzmUeNVbXS7QjtufgFYTCH8PT56EL8viMoPN8fkGu92eqsr97afkq9brGfbXZyEF` ([Explorer](https://explorer.solana.com/tx/2PMQQHDVbdiCmtvYfaxyRpwovzmUeNVbXS7QjtufgFYTCH8PT56EL8viMoPN8fkGu92eqsr97afkq9brGfbXZyEF?cluster=devnet))
+  - **Estado / Slot:** `Finalized`, `lastDeploySlot: 524962328` (`dataLen: 207288` bytes, `lamports: 1053901880`)
+- **Hashes de compilación e IDL sincronizados (`idl.json`, `src/config/programa.json`, `clients/js/src/generated/`):**
+  - `soSha256`: `77fad2c7a2f5ca10af2f4f78d46618e22cc2a8872e4c60eea0e938a687ddebf3`
+  - `idlSha256`: `078c89e157973aa4aea27b769ee3ab469f3d838272f11332b761f0fafa87020c`
+  - *Nota:* Los hashes locales y pruebas de comportamiento no demuestran por sí solos equivalencia byte a byte con el binario desplegado sin una comparación adicional mediante `solana program dump`.
+
+---
+
+## 2. Evidencia de los 8 casos guiados + aporte funcional (Devnet)
+
+Ejecución reproducible mediante `DEVNET_EXPECTED_AUTHORITY=A8dR6DpBnipYr7Rgi3pLA3ARM3sCAocbwvTmcjEfjb8t fnm exec --using=24 npm run verificar:devnet` (`tests/dia5-devnet.ts`).
+
+- **Negocio de prueba:** `DevnetD5-rdsbq2`
+- **PDAs públicas:**
+  - `registro`: `4dS2nya693XFqKpdkPULqsFrJMEBSnm8N8Mj8S7wQE9P`
+  - `ana` (`id=1`): `5y7bEfvinuf65Up9p75vF1bfm691ARZSVwsQhimR37KQ`
+  - `luis` (`id=2`): `GNYVTQudHNsuqBcCVZ37trkU1QfCzVuexWx6PpUuhV9D`
+  - `venta` (`CAF01`): `C2PKi9X3fRfcVziijvUZ9MRTVwLMJz5ctg2UmEAtW195`
+
+| # | Caso | Acción y estado esperado | Resultado observado y evidencia |
+| :--- | :--- | :--- | :--- |
+| **1** | **Crear Registro y Cliente** | Crear `Registro` (`DevnetD5-rdsbq2`) y clientes `Ana` (`id=1`) y `Luis` (`id=2`). | Confirmado en Devnet: `crearRegistro` [`2JFBpvvh...`](https://explorer.solana.com/tx/2JFBpvvh3hhZow89HSaRoLykPq2pg72ikiysdLG63aCXyqh23cEk1E2fyy36tadJSHHsQXKYRNS1sgc3jQP7SWvc?cluster=devnet), `crearAna` [`4WeXUkzL...`](https://explorer.solana.com/tx/4WeXUkzLJqpuHDjVFqzv2h73dxTegvU6FAG2faSWuLPLsr3BUPhyHmxWQKaRV8QYnBPMtsuB8N2nmWgL5YjM12o?cluster=devnet), `crearLuis` [`61bNqeWt...`](https://explorer.solana.com/tx/61bNqeWtfjPFPzMJSHTU8Uzi6Jri3rWJQyUxVuQUGz7HmoqnKMJ33NZRmDAatgDQyN2Ku8vfjrJs5LWXHydd4Fya?cluster=devnet). |
+| **2** | **Registrar una venta válida** | Registrar `CAF01` para `Ana` con `monto: 50`. | Confirmado en Devnet: [`5Uk5UdsN...`](https://explorer.solana.com/tx/5Uk5UdsNNDbn5w5tk6R7i3LWrgyJKqVVu1ohkPRoDHCyDu8pyTRhLCRRCZnXZMpUrc2H3LRivQJEADRiux8XWurK?cluster=devnet). `Venta` creada y vinculada a `Ana`. |
+| **3** | **Corregir el importe** | Actualizar `CAF01` mediante `cambiar_monto` a `nuevo_monto: 55`. | Confirmado en Devnet: [`2wyowMX1...`](https://explorer.solana.com/tx/2wyowMX1zbEjcFEMiYQECu4tUmdmCfaPikkxUgNT3Nz2mV5fh1vEko25gTnGvLXebuq4k9JxBztTchntmW842FYL?cluster=devnet). Lectura RPC confirma `venta.monto == 55`. |
+| **4** | **Realizar una devolución válida** | Ejecutar `hacer_devolucion` para `CAF01` de `Ana`. | Confirmado en Devnet: [`4kpg3o2q...`](https://explorer.solana.com/tx/4kpg3o2qi6M8Mw9fBfvWhjfnEiGKwn113oadB6FxxtuVf5U6xZ3DLavoyhbSNtAeraBWZ5vkmgHKfhDc4ZqzcD4c?cluster=devnet). `Venta` cerrada y `ana.compras == 0`, `ana.historial == []`. |
+| **5** | **Dar de baja un cliente vacío e ID monótono** | Ejecutar `eliminar_cliente(1)` (`Ana`) y crear después `Marta`. | Confirmado en Devnet: `eliminarCliente` [`67AEBN6h...`](https://explorer.solana.com/tx/67AEBN6h9MGNY4TigtnkTuHahAaJX9xqCZMxgp3YtZKEaLv9o72a7KFn5RW3PRZLyqwXsHQQXENTiiEvJA97Dw2o?cluster=devnet) (`ana` cerrada, renta reembolsada `2529840` lamports, fee `5000`, delta neto `+2524840`, `registro.clientes == [luis]`, `id_counter == 2`). Posteriormente `crearMarta` [`3qL2GBQi...`](https://explorer.solana.com/tx/3qL2GBQiB6QQQUGtgfNdpng4bbCbjuqc8buyzVMf8QVnkEcRQyZymDrRx16ybTxydQq9sCG6T6yyVywinMUjs1hc?cluster=devnet) asigna `marta.idCliente == 3` y `id_counter == 3`. |
+| **6** | **Utilizar una wallet no autorizada** | Firmar `cambiar_monto` sobre `DevnetD5-rdsbq2` con una wallet distinta al `owner` (preflight). | Rechazo en simulación preflight (sin transacción en cadena): `NoOwner: Error, no eres el owner del registro` (`0x1770` / `6000`). Snapshots de `registro`, `ana`, `venta` y saldo del firmante sin cambios. |
+| **7** | **Presentar una venta ajena al cliente** | Invocar `cambiar_monto` combinando `cliente: luis` (`id=2`) con la PDA `venta` de `Ana` (`CAF01`) (preflight). | Rechazo en simulación preflight (sin transacción en cadena): error de semillas `ConstraintSeeds` (`0x7d6` / `2006`). Snapshots de `registro`, `ana`, `luis`, `venta` y saldo sin cambios. |
+| **8** | **Dar de baja un cliente con ventas activas** | Invocar `eliminar_cliente(1)` mientras `CAF01` está activa (preflight). | Rechazo en simulación preflight (sin transacción en cadena): `ClienteConVentas: Error, el cliente tiene ventas activas` (`0x1773` / `6003`). Snapshots y saldo sin cambios. |
+| **9a** | **Aporte: `registrar_venta` con `monto = 0`** | Invocar `registrar_venta` con `sku: ZER01`, `monto: 0` (preflight). | Rechazo en simulación preflight (sin transacción en cadena): `MontoInvalido: Error, el monto debe ser mayor que cero` (`0x1774` / `6004`). Cuenta `ventaZero` inexistente (`null`); snapshots de `registro`, `ana` y saldo sin cambios. *(Nota: En `registrar_venta`, Anchor ejecuta `#[account(init)]` antes de `require!`; el fallo revierte cualquier cambio.)* |
+| **9b** | **Aporte: `cambiar_monto` con `nuevo_monto = 0`** | Invocar `cambiar_monto` sobre `CAF01` (`monto=55`) con `nuevo_monto: 0` (preflight). | Rechazo en simulación preflight (sin transacción en cadena): `MontoInvalido: Error, el monto debe ser mayor que cero` (`0x1774` / `6004`). `venta.monto == 55` preservado; snapshots de `registro`, `ana`, `venta` y saldo sin cambios. |
+
+### 2.1 Verificación independiente adicional de monto cero (2026-11-22, reporte de Codex)
+
+Como complemento independiente a la evidencia histórica de preflight sobre `DevnetD5-rdsbq2` (sección 2 anterior, que no generó firmas en Explorer por haberse detenido en simulación preflight), Codex ejecutó dos comprobaciones separadas contra el programa `F4DhinubMRrYQ3zFCKDe8xW4mu8gKFdkXTEKigwKGMht`:
+
+1. **Simulaciones firmadas en Devnet (con verificación de firma habilitada, sin envío ni comisión):**
+   - Tanto `registrar_venta` (`monto = 0`) como `cambiar_monto` (`nuevo_monto = 0`) alcanzaron la instrucción esperada y devolvieron `MontoInvalido` (`6004` / `0x1774`).
+   - Los snapshots de `Registro`, `Cliente`, la `Venta` existente y la `Venta` prospectiva con monto cero permanecieron sin cambios.
+2. **Transacciones firmadas difundidas con `skipPreflight` (fallos esperados con registro finalizado en Explorer):**
+   - A solicitud explícita para dejar registro público en Explorer, se difundieron dos transacciones separadas que **fallaron según lo esperado** en ejecución (su estado `finalized` confirma el rechazo registrado en cadena, no una operación exitosa):
+     - **`registrar_venta` (`monto = 0`):** [`4W3Ra3Y1...`](https://explorer.solana.com/tx/4W3Ra3Y1VDP7m15vbj4h7kRnVnCNoJXtQpLjhE2G4zv4GmboKQvv4NsURBV2Qs1MvjobBsjyoXNvH4VZGYgVU87H?cluster=devnet) — reportada `finalized` en el slot `525134394`, error `6004` (`MontoInvalido`), fee `5,000` lamports.
+     - **`cambiar_monto` (`nuevo_monto = 0`):** [`2FYFdWAR...`](https://explorer.solana.com/tx/2FYFdWARtoSa85j7mHVzicCB9cBRKGxnSt53pHYV5kfyHs963fvFCnxiqoNkUoixuMrKSfEP67Nw8G5DUiPsFhf2?cluster=devnet) — reportada `finalized` en el slot `525134555`, error `6004` (`MontoInvalido`), fee `5,000` lamports.
+   - **Estado posterior y limitación de aserciones:** Codex reportó que una consulta posterior de solo lectura mostró la venta existente aún en `55`, la cuenta prospectiva con monto cero ausente y la referencia de venta en el cliente intacta. *Limitación:* los scripts se detuvieron cuando el cliente devolvió los errores esperados, por lo que sus aserciones completas de snapshot antes/después para las transacciones difundidas **no finalizaron** (no se reportan como pasadas); Codex reconcilió las firmas y verificó el estado resultante por separado.
+   - **Verificación RPC de solo lectura posterior (AGY, 2026-11-22):** Una consulta posterior de solo lectura contra `https://api.devnet.solana.com` (`getSignatureStatuses` y `getTransaction`) confirmó directamente ambas firmas públicas en estado `finalized` bajo `F4DhinubMRrYQ3zFCKDe8xW4mu8gKFdkXTEKigwKGMht` con `InstructionError: [0, {"Custom": 6004}]` (`MontoInvalido` / `0x1774`) y `5,000` lamports de comisión cada una: `4W3Ra3Y1...` en el slot `525134394` (`Instruction: RegistrarVenta`, `lib.rs:60`) y `2FYFdWAR...` en el slot `525134555` (`Instruction: CambiarMonto`, `lib.rs:129`). *(Los metadatos de transacción confirman el rechazo esperado en cadena y la comisión, pero no sustituyen las aserciones incompletas de snapshot del script de difusión.)*
+
+---
+
+## 3. Comprobaciones de código, navegador y límites declarados
+
+- **Contrato IDL, TypeScript, pruebas unitarias y build:** `REQUIRE_ZERO_AMOUNT_IDL=1 fnm exec --using=24 npm run verificar` (incluye `comprobar:idl`, `tsc -b`, `17/17` pruebas en `tests/integracion-cliente.test.ts` verificando `MontoInvalido (6004)` y `vite build`).
+- **Verificación automatizada en navegador (`fnm exec --using=24 npm run verificar:browser`):** Ejecutada en navegador headless vía `chrome-devtools` CLI (`tests/dia5-browser.ts`); no firma ni envía transacciones en Devnet ni prueba una extensión real de wallet:
+  - **Suite 1 (Wallet simulada offline / sin extensión):** Conexión Wallet Standard (`61mKpgKT...FnUTW`), alerta de cancelación en `Crear registro` y `Eliminar cliente`, validación HTML5 `min="1"` para ID `0`, y bloqueo HTML5 `rangeUnderflow` para `monto = 0` (con `__offlineSignCalls` sin cambios) más control positivo con `monto = 1` en **Registrar venta** y **Corregir importe**. *(Demuestra bloqueo en UI; el rechazo on-chain `MontoInvalido` se valida por CLI arriba.)*
+  - **Suite 2 (Lectura pública en Devnet desde la app):** Consulta pública de `DevnetD5-og2vqf` (`A8dR6DpBnipYr7Rgi3pLA3ARM3sCAocbwvTmcjEfjb8t`) renderizada reactivamente.
+- **Recorrido interactivo en navegador sobre Devnet sin extensión (`DevnetZ0-ri6q6g`, firmante temporal Node + Chrome DevTools CLI):**
+  - Verificado flujo positivo completo desde los formularios web tras el upgrade (`finalized` vía `getSignatureStatuses`): `crear_registro` [`5WeZS2Tx...`](https://explorer.solana.com/tx/5WeZS2TxjqyJK2GFuuoQomGHwoQSoAKkgMYJh3mR3Vmg64cVpq1i4YsoW3xd3sYCizYDtGURE4Uvkc31kAqT1GxR?cluster=devnet) (refresco en vivo), `crear_cliente` (`Ana`) [`5cWShCWj...`](https://explorer.solana.com/tx/5cWShCWjw2sBV65pWrWUwsK5bXcekfXn1doNcqTRZCHPLahSwB3aM4iwDSLfBaKqFaGa78erCY45sqz2G36sUFaZ?cluster=devnet) (`Ana` visible tras pulsar **Consultar registro** en la segunda sesión de navegador), `registrar_venta` (`CAF01`, `50`) [`4pgHEmSk...`](https://explorer.solana.com/tx/4pgHEmSkAw5qGepM6WD1T9tanNhsdvxC32C2GmXBAkamSV7QTLyjv7rwpjpYr8VDUnU8vyBmEiYSdM17xc67i8Sw?cluster=devnet) (refresco en vivo mostró `CAF01` y `50`) y `cambiar_monto` (`CAF01`, `55`) [`5yu452FR...`](https://explorer.solana.com/tx/5yu452FRYrPziwCGB1HXErnwYdpDEEiMmMffz8v5TGE5ZqHQPTNJPc6TaiPmWtk1RyjMUWDGDqKvnicLdGs1DvfK?cluster=devnet) (refresco en vivo mostró `55`). *(El rechazo on-chain de monto cero `MontoInvalido` `6004` / `0x1774` se valida en la sección 2 por CLI; Suite 1 de `verificar:browser` valida el bloqueo HTML5 en UI.)*
+- **Repetición del firmante actualizado (2026-11-22):** Codex ejecutó el recorrido sin extensión con Chrome DevTools MCP y `tests/helpers/firmante-temporal.ts`, usando el negocio nuevo `DevnetZ0-s3o8fs`. Las cuatro transacciones alcanzaron `finalized`: [crear registro](https://explorer.solana.com/tx/4auJAfLvoeHhs2hiATL7V1JgTKbkUq39uTErMEBrFE4tsjhcqUQzVx1Gp69eGyhLwFKxPGcz1Ddjnh5mpzV5zWaN?cluster=devnet), [crear Ana](https://explorer.solana.com/tx/59Fwg5YtoeWCavJGYDxWhotGB2u9ntgkpZFfgrVb4rUydcUTPQLaRznkijYTyhz1qwAvTzyVjpSHkc8buZGkYmc5?cluster=devnet), [registrar CAF01 por 50](https://explorer.solana.com/tx/3wqwNtQFSTndzbd7FNHKRxU6BdKz8GhJcWYQh8MHd8Xafr8BvTb9aQnjLwNzsug4HfU7QhAQKySE1u1KSrywvBAg?cluster=devnet) y [corregir a 55](https://explorer.solana.com/tx/MPUcy99arwqm7h9ttQySi9QMpQwLg8U2Rc7uyNfRJH3tp5qhVffaYWf274gjJeeNTwPmVwmASSRqyoSRrmMvkSJ?cluster=devnet). La interfaz mostró a Ana y actualizó el importe de 50 a 55 sin consulta manual. Se usó un contexto de navegador aislado y se detuvieron el servidor Vite y el firmante iniciados para la prueba. Este recorrido positivo no vuelve a probar el rechazo de monto cero ni los escenarios de reinicio del firmante.
+- **Validador local compilado:** `NO_DNA=1 fnm exec --using=24 node scripts/probar-local.mjs` compila `programa/src/lib.rs`, valida en copia aislada y ejecuta `tests/dia5-local.ts` contra `solana-test-validator`.
+- **Alcance pendiente / no ejecutado en esta sesión:**
+  - Firma interactiva mediante una extensión de navegador instalada por el usuario (Phantom/Solflare, guía opcional en [`PRUEBAS-MANUALES.md`](./PRUEBAS-MANUALES.md)).
+  - Grabación de la demo de recorrido *(apoyo visual opcional; no es un requisito obligatorio en la página del curso)* para la entrega del formulario del curso.

@@ -188,6 +188,130 @@ AGY reportó una ejecución coordinada para `DevnetD5-og2vqf`: el navegador most
 
 El 20 de noviembre de 2026, una consulta de solo lectura con Chrome DevTools MCP abrió ese negocio con la autoridad pública `A8dR6DpBnipYr7Rgi3pLA3ARM3sCAocbwvTmcjEfjb8t` y mostró a Luis como único cliente y último ID 2. Esa consulta no repitió la baja ni el rechazo y no envió transacciones.
 
+---
+
+## Verificación en navegador del aporte de monto cero (post-upgrade)
+
+Tras actualizar `F4DhinubMRrYQ3zFCKDe8xW4mu8gKFdkXTEKigwKGMht` en Devnet (slot `524962328`), la cobertura sin extensión se divide en dos comprobaciones distintas:
+
+1. **Bloqueo de formulario en navegador (`npm run verificar:browser` — `tests/dia5-browser.ts`):**
+   - Con `Offline Test Wallet`, tanto **Registrar venta** (`Importe = 0`) como **Corregir importe** (`Nuevo importe = 0`) son bloqueados por la validación nativa HTML5 (`min="1"`, `validity.rangeUnderflow === true`, `validity.valid === false`) **antes** de invocar `solana:signTransaction` (`__offlineSignCalls` no se incrementa).
+   - Un control positivo en ambos formularios con `monto = 1` sí alcanza `solana:signTransaction` (`__offlineSignCalls` + 1) y muestra «La firma fue cancelada en la wallet».
+   - *Alcance:* Esto demuestra únicamente bloqueo del formulario en cliente, **no** rechazo on-chain (`MontoInvalido` `6004` / `0x1774` se comprueba por CLI en `tests/dia5-devnet.ts` y `tests/dia5-local.ts`).
+2. **Recorrido repetible en Devnet desde navegador sin extensión (`DevnetZ0-*` + firmante Node temporal):**
+
+   Este procedimiento ejecuta el flujo positivo completo (`crear_registro` $\to$ `crear_cliente` `Ana` $\to$ `registrar_venta` `CAF01` `monto: 50` $\to$ `cambiar_monto` `CAF01` `nuevo_monto: 55`) desde los formularios de la app sin extensión de wallet. El bloqueo con `monto = 0` se comprueba en Suite 1 (`tests/dia5-browser.ts`) y el rechazo on-chain `MontoInvalido` (`6004` / `0x1774`) se comprueba por CLI en `tests/dia5-devnet.ts` y `tests/dia5-local.ts`.
+
+   - **Prerrequisitos y negocio nuevo:**
+     - Keypair externo fuera del repo: por defecto `~/.config/solana/registro-devnet-tester-keypair.json`, o define `DEVNET_AUTHORITY_KEYPAIR=<ruta-externa>` para usar **tu propio** keypair de práctica en Devnet (verificado con `assertExternalPath` y saldo `>= 30_000_000` lamports = `0.03 SOL`). Nunca copies claves privadas ni frases semilla al repo ni al navegador, ni solicites el keypair del autor.
+     - Servidor Vite local en una terminal dedicada:
+       ```bash
+       fnm exec --using=24 npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
+       ```
+     - El firmante genera un nombre nuevo `DevnetZ0-<sufijo>`, comprueba génesis de Devnet (`EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG`), `REGISTRO_PROGRAM_ADDRESS` (`F4DhinubMRrYQ3zFCKDe8xW4mu8gKFdkXTEKigwKGMht`, `executable: true`) y que la PDA `registro` aún no exista (`null`).
+
+   - **Firmante temporal Node en `127.0.0.1` (4 etapas ordenadas usando `tests/helpers/firmante-temporal.ts`):**
+     Ejecuta el proceso en segundo plano; imprimirá `READY <PORT> <TOKEN> <BIZ> <PUBKEY> <STATE_PATH>`:
+     ```bash
+     fnm exec --using=24 node --import tsx --input-type=module -e '
+     import { createServer } from "node:http";
+     import { randomBytes } from "node:crypto";
+     import { readFileSync } from "node:fs";
+     import { homedir } from "node:os";
+     import { join } from "node:path";
+     import { Connection, Keypair, PublicKey } from "@solana/web3.js";
+     import { REGISTRO_PROGRAM_ADDRESS } from "./clients/js/src/generated/index.ts";
+     import { assertExternalPath } from "./tests/dia5-devnet.ts";
+     import { crearManejadorFirmante } from "./tests/helpers/firmante-temporal.ts";
+
+     const c = new Connection("https://api.devnet.solana.com", "confirmed");
+     if (await c.getGenesisHash() !== "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG") throw Error("wrong cluster");
+     if (String(REGISTRO_PROGRAM_ADDRESS) !== "F4DhinubMRrYQ3zFCKDe8xW4mu8gKFdkXTEKigwKGMht") throw Error("wrong program id");
+     const programInfo = await c.getAccountInfo(new PublicKey(REGISTRO_PROGRAM_ADDRESS), "confirmed");
+     if (!programInfo?.executable) throw Error("program not executable");
+
+     const rawKeyPath = process.env.DEVNET_AUTHORITY_KEYPAIR || join(homedir(), ".config/solana/registro-devnet-tester-keypair.json");
+     const keyPath = assertExternalPath(rawKeyPath, process.cwd());
+     const k = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(readFileSync(keyPath, "utf8"))));
+     const bal = await c.getBalance(k.publicKey, "confirmed");
+     if (bal < 30_000_000) throw Error(`insufficient balance: ${bal}`);
+
+     const resumeBiz = process.env.DEVNET_Z0_BIZ?.trim();
+     const modo = resumeBiz ? "reanudar" : "nuevo";
+     const biz = resumeBiz || "DevnetZ0-" + Date.now().toString(36).slice(-6);
+     const statePath = assertExternalPath(join(homedir(), `.config/solana/registro-firmante-state-${biz}.json`), process.cwd());
+     const manejador = crearManejadorFirmante({ connection: c, keypair: k, biz, statePath, modo });
+     await manejador.verificarInicio();
+
+     const token = randomBytes(24).toString("hex");
+     const server = createServer(async (req, res) => {
+       const origin = req.headers.origin;
+       res.setHeader("Access-Control-Allow-Origin", "http://127.0.0.1:5173");
+       res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Test-Token");
+       if (req.method === "OPTIONS") { res.writeHead(204); return res.end(); }
+       if (req.method !== "POST" || origin !== "http://127.0.0.1:5173" || req.headers["x-test-token"] !== token) {
+         res.writeHead(403); return res.end();
+       }
+       try {
+         let body = "";
+         for await (const chunk of req) { body += chunk; if (body.length > 10_000) throw Error("oversized"); }
+         const data = JSON.parse(body);
+         const out = await manejador.procesar(data.bytes);
+         if (out.status !== 200) {
+           console.error("REJECT", out.status, out.error);
+           res.writeHead(out.status);
+           return res.end(JSON.stringify({ error: out.error }));
+         }
+         console.log(`SIGNED stage=${out.stage} sig=${out.sig}`);
+         res.setHeader("Content-Type", "application/json");
+         res.end(JSON.stringify({ bytes: out.bytes }));
+       } catch (e) {
+         console.error("REJECT", String(e));
+         res.writeHead(400); res.end();
+       }
+     });
+     server.listen(0, "127.0.0.1", () => {
+       const addr = server.address();
+       console.log(`READY ${addr.port} ${token} ${biz} ${k.publicKey.toBase58()} ${statePath}`);
+       console.log(`PUBLIC_KEY_BYTES ${JSON.stringify(Array.from(k.publicKey.toBytes()))}`);
+     });
+     '
+     ```
+     *Restricciones del firmante (`tests/helpers/firmante-temporal.ts`):* solo acepta `POST` desde `Origin: http://127.0.0.1:5173` con `X-Test-Token` válido, cuerpo `<= 10_000` bytes, solicitudes serializadas (`inFlight`), `isBlockhashValid`, mensaje compilado (`tx.serializeMessage()`) idéntico al construido independientemente con `pdaRegistro`/`pdaCliente`/`pdaVenta` y los builders Codama + `aWeb3`, registro de `{ sig, blockhash }` en disco fuera del repo antes de responder, bloqueo conservador de re-firma ante estado `null` o `processed` (`409`, sin inferir expiración desde un `getLatestBlockhash()` posterior no relacionado), avance de etapa únicamente cuando **ambos** (la firma previa `confirmed`/`finalized` con `err === null` y la cuenta esperada on-chain) se confirman, y reintento únicamente cuando una firma previa quedó `confirmed`/`finalized` con `err !== null` sin mutar la cuenta.
+
+   - **Reinicio del firmante tras interrupción:**
+     - Al reiniciar para el mismo negocio, pasa `DEVNET_Z0_BIZ=<BIZ>` (`modo: "reanudar"`): el firmante exige que exista y sea válido `~/.config/solana/registro-firmante-state-<BIZ>.json`, restaura las firmas pendientes y falla cerrado (`409`) si alguna firma sigue sin resolverse (`status === null` o `processed`).
+     - Si el archivo de estado falta o está corrupto en `modo: "reanudar"` (incluso en etapa 0 cuando `registro` aún es `null` on-chain) o si en `modo: "nuevo"` ya existe `registro` o el archivo de estado, el firmante falla cerrado al arrancar; debes reconciliar manualmente la última firma impresa (`SIGNED stage=... sig=...`) con `getSignatureStatuses` y la PDA correspondiente antes de continuar.
+
+   - **Inicialización del navegador (Chrome DevTools CLI / MCP):**
+     Sustituye `PORT` y `TOKEN` por los impresos en `READY`. Si usas **tu propio** keypair (`DEVNET_AUTHORITY_KEYPAIR`), sustituye también `address` por tu `<PUBKEY>` y `publicKey` por el arreglo `PUBLIC_KEY_BYTES` de 32 bytes públicos que imprime el firmante (no uses `PublicKey` dentro del navegador ni copies bytes privados); inicia una pestaña limpia (`new_page` `about:blank`) y navega a `http://127.0.0.1:5173/` con este `initScript` (solo clave pública, sin secretos):
+     ```js
+     (()=>{const address="A8dR6DpBnipYr7Rgi3pLA3ARM3sCAocbwvTmcjEfjb8t",publicKey=new Uint8Array([135,173,108,71,72,25,121,41,224,149,54,46,248,174,18,67,176,134,11,117,9,161,37,170,219,176,23,88,28,69,62,161]);const account=Object.freeze({address,publicKey,chains:["solana:devnet"],features:["solana:signTransaction"]});let accounts=[];const listeners=new Set();const wallet={version:"1.0.0",name:"Dedicated Devnet Test Wallet",icon:"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiI+PC9zdmc+",chains:["solana:devnet"],get accounts(){return accounts},features:{"standard:connect":{version:"1.0.0",connect:async()=>{accounts=[account];listeners.forEach(f=>f({accounts}));return {accounts}}},"standard:disconnect":{version:"1.0.0",disconnect:async()=>{accounts=[];listeners.forEach(f=>f({accounts}))}},"standard:events":{version:"1.0.0",on:(event,f)=>{if(event==="change")listeners.add(f);return()=>listeners.delete(f)}},"solana:signTransaction":{version:"1.0.0",supportedTransactionVersions:["legacy",0],signTransaction:async(...inputs)=>{if(inputs.length!==1||inputs[0].chain!=="solana:devnet")throw Error("unexpected request");const r=await fetch("http://127.0.0.1:PORT",{method:"POST",headers:{"Content-Type":"application/json","X-Test-Token":"TOKEN"},body:JSON.stringify({bytes:Array.from(inputs[0].transaction)})});if(!r.ok)throw Error("test signer refused");const result=await r.json();return [{signedTransaction:new Uint8Array(result.bytes)}]}}}};const register=({register})=>register(wallet);window.addEventListener("wallet-standard:app-ready",e=>register(e.detail));window.dispatchEvent(new CustomEvent("wallet-standard:register-wallet",{detail:register}));})();
+     ```
+
+   - **Pasos en navegador y resultados esperados:**
+     1. Pulsa **Conectar wallet** $\to$ **Dedicated Devnet Test Wallet** y escribe `<BIZ>` en **Nombre exacto del negocio**.
+     2. **Etapa 0 (`Crear registro`):** envía el formulario $\to$ espera `Operación confirmada.` y `<BIZ>` en la UI.
+     3. **Etapa 1 (`Crear cliente`):** abre la pestaña, escribe `Ana` en **Nombre del cliente** y envía $\to$ espera `Operación confirmada.` y `Ana` (`Cliente #1`). Si el snapshot expira antes de reflejarlo, consulta `<BIZ>` con **Consultar registro** para confirmar `Ana` antes de pasar a la etapa 2.
+     4. **Etapa 2 (`Registrar venta`):** introduce `ID del cliente = 1`, `SKU = CAF01`, `Descripción = Cafe americano`, `Importe = 50` y envía $\to$ espera `Operación confirmada.`, `CAF01` y `50` en la UI.
+     5. **Etapa 3 (`Corregir importe`):** introduce `ID del cliente = 1`, `SKU = CAF01`, `Nuevo importe = 55` y envía $\to$ espera `Operación confirmada.` y `55` en la UI.
+
+   - **Captura de firmas y reconciliación tras resultado incierto:**
+     - El firmante imprime `SIGNED stage=<n> sig=<base58>` y guarda la firma en `signedSigs`.
+     - Ante timeout de UI o error de red tras firmar, consulta `getSignatureStatuses([sig], { searchTransactionHistory: true })` y la PDA correspondiente (`registro`, `ana` o `venta`) antes de reintentar: si la transacción ya se confirmó, el firmante rechaza re-firmar esa etapa y avanza a la siguiente al verificar la cuenta on-chain.
+
+   - **Limpieza:**
+     - Navega la pestaña de prueba a `about:blank` y, solo si iniciaste un daemon de `chrome-devtools` exclusivamente para esta prueba (no si ya había uno del usuario en ejecución), ejecuta `chrome-devtools stop`; detén únicamente el firmante temporal Node y el servidor Vite iniciados para el recorrido.
+
+   - **Ejecución observada (`DevnetZ0-ri6q6g`, autoridad `A8dR6DpBnipYr7Rgi3pLA3ARM3sCAocbwvTmcjEfjb8t`, Chrome DevTools CLI):**
+     - Etapa 0 (`crear_registro`): [`5WeZS2Tx...`](https://explorer.solana.com/tx/5WeZS2TxjqyJK2GFuuoQomGHwoQSoAKkgMYJh3mR3Vmg64cVpq1i4YsoW3xd3sYCizYDtGURE4Uvkc31kAqT1GxR?cluster=devnet) (`finalized`, slot `524993689`, refresco en vivo).
+     - Etapa 1 (`crear_cliente` `Ana`): [`5cWShCWj...`](https://explorer.solana.com/tx/5cWShCWjw2sBV65pWrWUwsK5bXcekfXn1doNcqTRZCHPLahSwB3aM4iwDSLfBaKqFaGa78erCY45sqz2G36sUFaZ?cluster=devnet) (`finalized`, slot `524993720`, `Ana` visible tras pulsar **Consultar registro** en una segunda sesión de navegador).
+     - Etapa 2 (`registrar_venta` `CAF01`, `monto: 50`): [`4pgHEmSk...`](https://explorer.solana.com/tx/4pgHEmSkAw5qGepM6WD1T9tanNhsdvxC32C2GmXBAkamSV7QTLyjv7rwpjpYr8VDUnU8vyBmEiYSdM17xc67i8Sw?cluster=devnet) (`finalized`, slot `524994194`, refresco en vivo mostró `CAF01` y `50`).
+     - Etapa 3 (`cambiar_monto` `CAF01`, `nuevo_monto: 55`): [`5yu452FR...`](https://explorer.solana.com/tx/5yu452FRYrPziwCGB1HXErnwYdpDEEiMmMffz8v5TGE5ZqHQPTNJPc6TaiPmWtk1RyjMUWDGDqKvnicLdGs1DvfK?cluster=devnet) (`finalized`, slot `524994231`, refresco en vivo mostró `55`).
+   - *Límite:* Utiliza un puente Wallet Standard programático local; no prueba una extensión de navegador instalada por el usuario (Phantom/Solflare). La sesión de `DevnetZ0-ri6q6g` no registró explícitamente `--isolated` ni la ruta de perfil de Chrome en tiempo de ejecución.
+
+   Una repetición posterior del firmante actualizado con Chrome DevTools MCP y un contexto aislado está registrada en [PRUEBAS-Y-EVIDENCIAS.md](./PRUEBAS-Y-EVIDENCIAS.md), con sus cuatro firmas y límites.
+
 La combinación coordinada de Node y consultas del navegador verifica operaciones iniciadas por CLI y lecturas posteriores; por sí sola no verifica firma en navegador ni refresco automático. Esas conductas se observaron por separado en los recorridos de wallet simulada y wallet programática indicados arriba, con sus respectivos límites. Para los demás casos de interfaz, consulta [PRUEBAS-MANUALES.md](./PRUEBAS-MANUALES.md).
 
 La prueba defensiva `NoCliente` con un cliente ausente del índice se registró por separado en la rama `dia5/local-verification`; no forma parte de este flujo Devnet. Para el historial local y sus requisitos, consulta [DIA-5-VALIDACION.md](./DIA-5-VALIDACION.md). No ejecutes los scripts `clase:dia3`, `clase:dia4` o `clase:resuelto` en este árbol para preparar estas pruebas: pueden sobrescribir la implementación.

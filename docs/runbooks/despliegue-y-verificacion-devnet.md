@@ -15,10 +15,10 @@ Procedimiento operativo estándar para desplegar el programa Anchor en Devnet y 
    ```bash
    fnm use 24
    ```
-2. **Keypair de prueba externo:** Debe existir en `~/.config/solana/registro-devnet-tester-keypair.json` (fuera del repositorio).
+2. **Keypair de prueba externo:** Por defecto `~/.config/solana/registro-devnet-tester-keypair.json` (fuera del repositorio); si usas otro keypair de práctica, define `DEVNET_AUTHORITY_KEYPAIR=<ruta-externa>` junto con `DEVNET_EXPECTED_AUTHORITY=<tu-pubkey>`.
 3. **Saldo en Devnet:** Mínimo 0.03 SOL (`30_000_000` lamports). Si el saldo es menor, el script intenta hasta 2 airdrops automáticos acotados a 1 SOL.
 4. **Autoridad esperada:**
-   `A8dR6DpBnipYr7Rgi3pLA3ARM3sCAocbwvTmcjEfjb8t` (ajustar la variable de entorno si se utiliza otra clave de práctica).
+   `A8dR6DpBnipYr7Rgi3pLA3ARM3sCAocbwvTmcjEfjb8t` en la corrida de referencia (ajusta `DEVNET_EXPECTED_AUTHORITY` y `DEVNET_AUTHORITY_KEYPAIR` si utilizas tu propia clave de práctica).
 
 ---
 
@@ -27,12 +27,21 @@ Procedimiento operativo estándar para desplegar el programa Anchor en Devnet y 
 ### Paso 1: Verificación de Integridad Local
 ```bash
 fnm exec --using=24 npm run comprobar:idl
-fnm exec --using=24 npm run verificar
+REQUIRE_ZERO_AMOUNT_IDL=1 fnm exec --using=24 npm run verificar
 git diff --check
 ```
-* **Resultado esperado:** Contrato coherente, 10/10 pruebas unitarias aprobadas, build de producción en `dist/` completado.
+* **Resultado esperado:** Contrato coherente, `17/17` pruebas unitarias aprobadas en la línea base de entrega (y `18/18` en una observación posterior tras añadir las pruebas offline de `tests/helpers/firmante-temporal.ts`), build de producción en `dist/` completado.
 
-### Paso 2 (Opcional): Despliegue o Actualización en Devnet
+### Paso 2 (Opcional): Compilación sin Despliegue o Despliegue en Devnet
+Para compilar `programa/src/lib.rs` y exportar el `idl.json` sin desplegar (requiere `anchor-cli 1.2.2`, `solana-cli 4.1.2` con `cargo-build-sbf --tools-version v1.57 --arch v3`, `cargo 1.99.1`, `tests/fixtures/registro-Cargo.lock` y red/caché de Cargo para `anchor-lang` rev `33868ffeecdc96803e87cfb27748e9ec1f069eec`):
+```bash
+NO_DNA=1 fnm exec --using=24 node scripts/desplegar-devnet.mjs --solo-build \
+  --program-id F4DhinubMRrYQ3zFCKDe8xW4mu8gKFdkXTEKigwKGMht \
+  --out-dir .aula/local-runs/solo-build-out \
+  --work-dir .aula/local-runs/solo-build-work
+```
+*(Usa rutas distintas bajo `.aula/local-runs/`: `--out-dir` debe estar vacío o no existir y conserva `registro.so` e `idl.json`; `--work-dir` aloja y limpia la subcarpeta temporal `dia5-devnet-build-*`. Si se omite `--work-dir`, `scripts/desplegar-devnet.mjs` usa `os.tmpdir()`, aunque lo limpia en `finally`. Los hashes de `.so` e `idl.json` corresponden a artefactos distintos y no prueban por sí solos equivalencia byte a byte con el binario desplegado sin `solana program dump`.)*
+
 Si el activador incluye desplegar una nueva compilación del programa en Devnet:
 ```bash
 fnm exec --using=24 node scripts/desplegar-devnet.mjs
@@ -40,10 +49,9 @@ fnm exec --using=24 node scripts/desplegar-devnet.mjs
 # fnm exec --using=24 node scripts/desplegar-devnet.mjs --upgrade
 ```
 * **Requisitos:** Requiere `solana` y `anchor` en `$PATH`, keypairs externos en `~/.config/solana/` (`registro-devnet-tester-keypair.json` y `registro-devnet-program-keypair.json`), y saldo suficiente para renta.
-* **Sincronización:** Tras el despliegue, regenerar cliente y verificar contrato:
+* **Sincronización:** `scripts/desplegar-devnet.mjs` ya ejecuta la importación atómica del IDL y la regeneración del cliente (`stageIdlImport`). Si importas un IDL externo manualmente, usa:
   ```bash
-  fnm exec --using=24 npm run configurar:idl
-  fnm exec --using=24 npm run cliente
+  fnm exec --using=24 npm run configurar:idl -- <ruta/al/idl.json>
   fnm exec --using=24 npm run comprobar:idl
   ```
 

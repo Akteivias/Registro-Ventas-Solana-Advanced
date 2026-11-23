@@ -1,5 +1,5 @@
 {
-  "address": "38oTMyvUTmqkBQeMiuok5F2mPjp9dVadWdBeQTDNmTUY",
+  "address": "F4DhinubMRrYQ3zFCKDe8xW4mu8gKFdkXTEKigwKGMht",
   "metadata": {
     "name": "registro",
     "version": "0.1.0",
@@ -513,6 +513,11 @@
       "code": 6003,
       "name": "ClienteConVentas",
       "msg": "Error, el cliente tiene ventas activas"
+    },
+    {
+      "code": 6004,
+      "name": "MontoInvalido",
+      "msg": "Error, el monto debe ser mayor que cero"
     }
   ],
   "types": [

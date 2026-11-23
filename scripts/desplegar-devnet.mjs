@@ -5,6 +5,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -230,8 +231,9 @@ wallet = "~/.config/solana/id.json"
 
 /**
  * Stages IDL import and client generation in an isolated `/tmp` directory,
- * backs up the 4 repository target artifacts, applies the staged outputs,
- * runs `verificar-contrato.mjs`, and rolls back all 4 targets on any failure.
+ * backs up the 5 repository target artifacts (including `.aula/idl-codama.json`),
+ * applies the staged outputs, runs `verificar-contrato.mjs`, and rolls back all
+ * 5 targets on any failure.
  */
 export function stageIdlImport({ repoRoot = REPO_ROOT, idlPath, programId, backupDir, postApplyHook }) {
   const stageDir = mkdtempSync(join(tmpdir(), 'dia5-idl-stage-'));
@@ -261,11 +263,17 @@ export function stageIdlImport({ repoRoot = REPO_ROOT, idlPath, programId, backu
     runCmd(process.execPath, ['scripts/verificar-contrato.mjs'], { cwd: stageDir });
 
     mkdirSync(backupDir, { recursive: true, mode: 0o700 });
-    const targets = ['idl.json', 'src/config/programa.json', 'clients/js/package.json'];
+    const targets = ['idl.json', '.aula/idl-codama.json', 'src/config/programa.json', 'clients/js/package.json'];
+    const hadTarget = new Map();
     for (const rel of targets) {
-      const dst = join(backupDir, rel);
-      mkdirSync(dirname(dst), { recursive: true });
-      cpSync(resolve(repoRoot, rel), dst);
+      const src = resolve(repoRoot, rel);
+      const exists = existsSync(src);
+      hadTarget.set(rel, exists);
+      if (exists) {
+        const dst = join(backupDir, rel);
+        mkdirSync(dirname(dst), { recursive: true });
+        cpSync(src, dst);
+      }
     }
     const repoGenerated = resolve(repoRoot, 'clients/js/src/generated');
     const backupGenerated = join(backupDir, 'clients/js/src/generated');
@@ -274,7 +282,9 @@ export function stageIdlImport({ repoRoot = REPO_ROOT, idlPath, programId, backu
 
     try {
       for (const rel of targets) {
-        cpSync(join(stageDir, rel), resolve(repoRoot, rel));
+        const dst = resolve(repoRoot, rel);
+        mkdirSync(dirname(dst), { recursive: true });
+        cpSync(join(stageDir, rel), dst);
       }
       rmSync(repoGenerated, { recursive: true, force: true });
       cpSync(join(stageDir, 'clients/js/src/generated'), repoGenerated, { recursive: true });
@@ -283,7 +293,13 @@ export function stageIdlImport({ repoRoot = REPO_ROOT, idlPath, programId, backu
     } catch (applyErr) {
       try {
         for (const rel of targets) {
-          cpSync(join(backupDir, rel), resolve(repoRoot, rel));
+          const dst = resolve(repoRoot, rel);
+          if (hadTarget.get(rel)) {
+            mkdirSync(dirname(dst), { recursive: true });
+            cpSync(join(backupDir, rel), dst);
+          } else {
+            rmSync(dst, { force: true });
+          }
         }
         rmSync(repoGenerated, { recursive: true, force: true });
         cpSync(backupGenerated, repoGenerated, { recursive: true });
@@ -328,22 +344,59 @@ async function ensureDevnetFunding(connection, authorityPubkey, estimatedRequire
   );
 }
 
+function parseStringFlag(argv, flag) {
+  const idx = argv.indexOf(flag);
+  if (idx < 0) return undefined;
+  const val = argv[idx + 1];
+  if (!val || val.startsWith('--')) throw new Error(`Falta el valor de ${flag}.`);
+  return val;
+}
+
 function parseArgs(argv) {
   const soloBuild = argv.includes('--solo-build');
   const generarKeypairs = argv.includes('--generar-keypairs');
   const upgrade = argv.includes('--upgrade');
-  const idxPid = argv.indexOf('--program-id');
-  let programIdArg;
-  if (idxPid >= 0) {
-    programIdArg = argv[idxPid + 1];
-    if (!programIdArg || programIdArg.startsWith('--')) throw new Error('Falta el valor de --program-id.');
-    programIdArg = new PublicKey(programIdArg).toBase58();
+  const rawPid = parseStringFlag(argv, '--program-id');
+  const programIdArg = rawPid ? new PublicKey(rawPid).toBase58() : undefined;
+  const outDirArg = parseStringFlag(argv, '--out-dir');
+  const workDirArg = parseStringFlag(argv, '--work-dir');
+  return { soloBuild, generarKeypairs, upgrade, programIdArg, outDirArg, workDirArg };
+}
+
+function assertEmptyOrNewDir(targetPath) {
+  const resolved = resolve(targetPath);
+  if (existsSync(resolved)) {
+    const entries = readdirSync(resolved);
+    if (entries.length > 0) {
+      throw new Error(`--out-dir debe estar vacio o no existir: ${resolved}`);
+    }
   }
-  return { soloBuild, generarKeypairs, upgrade, programIdArg };
+  return resolved;
+}
+
+/**
+ * Creates a run-owned `dia5-devnet-build-*` child directory inside `workDirArg`
+ * (or `tmpdir()` when omitted) and removes only that child directory in `finally`,
+ * leaving any caller-owned `workDirArg` and its pre-existing contents intact.
+ */
+export function withWorkDir(workDirArg, fn) {
+  let buildDir;
+  if (workDirArg) {
+    const workRoot = resolve(workDirArg);
+    mkdirSync(workRoot, { recursive: true });
+    buildDir = mkdtempSync(join(workRoot, 'dia5-devnet-build-'));
+  } else {
+    buildDir = mkdtempSync(join(tmpdir(), 'dia5-devnet-build-'));
+  }
+  try {
+    return fn(buildDir);
+  } finally {
+    rmSync(buildDir, { recursive: true, force: true });
+  }
 }
 
 async function main() {
-  const { soloBuild, generarKeypairs, upgrade, programIdArg } = parseArgs(process.argv.slice(2));
+  const { soloBuild, generarKeypairs, upgrade, programIdArg, outDirArg, workDirArg } = parseArgs(process.argv.slice(2));
   if (generarKeypairs) {
     runGenerarKeypairs();
     return;
@@ -357,19 +410,27 @@ async function main() {
         ? loadKeypair(candidatePath).publicKey.toBase58()
         : Keypair.generate().publicKey.toBase58();
     }
-    const buildDir = mkdtempSync(join(tmpdir(), 'dia5-devnet-build-'));
-    try {
+    const outDir = outDirArg ? assertEmptyOrNewDir(outDirArg) : undefined;
+    withWorkDir(workDirArg, (buildDir) => {
       const built = buildOfflineProgramAndIdl(programId, buildDir);
+      let retained;
+      if (outDir) {
+        mkdirSync(outDir, { recursive: true });
+        const soOut = join(outDir, 'registro.so');
+        const idlOut = join(outDir, 'idl.json');
+        cpSync(built.soPath, soOut);
+        cpSync(built.tempIdlPath, idlOut);
+        retained = { soPath: soOut, idlPath: idlOut };
+      }
       console.log(JSON.stringify({
         mode: 'solo-build',
         programId,
         soBytes: built.soBytes,
         soSha256: built.soSha256,
         idlSha256: built.idlSha256,
+        ...(retained ?? {}),
       }, null, 2));
-    } finally {
-      rmSync(buildDir, { recursive: true, force: true });
-    }
+    });
     return;
   }
 
@@ -395,7 +456,11 @@ async function main() {
     if (!existingInfo.executable || existingInfo.owner.toBase58() !== BPF_LOADER_UPGRADEABLE_ID) {
       throw new Error(`La cuenta ${programId} ya existe en Devnet pero no es un programa BPFUpgradeable ejecutable.`);
     }
-    const showRes = runCmd('solana', ['program', 'show', programId, '--url', rpcUrl, '--output', 'json'], { capture: true });
+    const showRes = runCmd(
+      'solana',
+      ['program', 'show', programId, '--url', rpcUrl, '--keypair', authorityKeypairPath, '--output', 'json'],
+      { capture: true },
+    );
     const showJson = JSON.parse(showRes.stdout);
     if (showJson.authority !== authorityPubkey) {
       throw new Error(`Upgrade authority mismatch: en cadena=${showJson.authority}, local=${authorityPubkey}.`);
@@ -432,10 +497,17 @@ async function main() {
       }, null, 2) + '\n',
     );
 
-    const rentProgramData = await connection.getMinimumBalanceForRentExemption(45 + built.soBytes);
-    const rentProgram = await connection.getMinimumBalanceForRentExemption(36);
+    const rentRetry = async (fn) => {
+      try {
+        return await fn();
+      } catch {
+        return await fn();
+      }
+    };
+    const rentProgramData = await rentRetry(() => connection.getMinimumBalanceForRentExemption(45 + built.soBytes));
+    const rentProgram = await rentRetry(() => connection.getMinimumBalanceForRentExemption(36));
     const estimatedRequired = rentProgramData + rentProgram + 10_000_000;
-    await ensureDevnetFunding(connection, authorityPubkey, estimatedRequired);
+    await rentRetry(() => ensureDevnetFunding(connection, authorityPubkey, estimatedRequired));
 
     const bufferKeypairPath = join(recoveryDir, 'buffer-keypair.json');
     runCmd('solana-keygen', ['new', '--no-bip39-passphrase', '--silent', '--outfile', bufferKeypairPath]);

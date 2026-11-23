@@ -16,6 +16,7 @@ import {
 import { address, createNoopSigner, getBase58Decoder } from '@solana/kit';
 import {
   REGISTRO_PROGRAM_ADDRESS,
+  getCambiarMontoInstruction,
   getClienteDecoder,
   getCrearClienteInstruction,
   getCrearRegistroInstruction,
@@ -23,6 +24,7 @@ import {
   getHacerDevolucionInstruction,
   getRegistrarVentaInstruction,
   getRegistroDecoder,
+  getVentaDecoder,
 } from '../clients/js/src/generated';
 import { pdaCliente, pdaRegistro, pdaVenta } from '../src/solana/pdas';
 import { comprobarPrograma } from '../src/solana/seguridad';
@@ -181,11 +183,12 @@ async function sendAndConfirmWithReconciliation(
   ix: InstruccionKit,
   label: string,
   inspectAccounts: string[],
+  extraSigners: Keypair[] = [],
 ): Promise<string> {
   const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
   const tx = new Transaction({ feePayer: authority.publicKey, blockhash, lastValidBlockHeight });
   tx.add(aWeb3(ix));
-  tx.sign(authority);
+  tx.sign(authority, ...extraSigners);
 
   const sigBytes = tx.signatures[0]?.signature;
   if (!sigBytes) {
@@ -335,8 +338,40 @@ async function main() {
   const registro = pdaRegistro(nombreNegocio, signer.address);
   const ana = pdaCliente(registro, 1);
   const luis = pdaCliente(registro, 2);
+  const marta = pdaCliente(registro, 3);
   const venta = pdaVenta(ana, 'CAF01');
-  const tracked = [registro, ana, luis, venta];
+  const ventaZero = pdaVenta(ana, 'ZER01');
+  const tracked = [registro, ana, luis, venta, ventaZero];
+
+  async function expectPreflightReject(
+    ix: InstruccionKit,
+    txSigner: Keypair,
+    label: string,
+    expectedPattern: RegExp,
+    inspectList: string[],
+    extraSigners: Keypair[] = [],
+  ) {
+    const before = await Promise.all(inspectList.map((addr) => snapshotAccount(connection, addr)));
+    const balBefore = await connection.getBalance(txSigner.publicKey, 'confirmed');
+    let rejectedErr: unknown = null;
+    try {
+      await sendAndConfirmWithReconciliation(connection, txSigner, ix, label, inspectList, extraSigners);
+    } catch (err) {
+      rejectedErr = err;
+    }
+    assert.ok(rejectedErr instanceof SendTransactionError, `[${label}] Expected SendTransactionError on preflight rejection`);
+    const logs = rejectedErr.logs ?? (await rejectedErr.getLogs?.(connection)) ?? [];
+    assert.match(
+      logs.join('\n'),
+      expectedPattern,
+      `[${label}] Unexpected preflight logs: ${logs.join(' | ')}`,
+    );
+    const after = await Promise.all(inspectList.map((addr) => snapshotAccount(connection, addr)));
+    const balAfter = await connection.getBalance(txSigner.publicKey, 'confirmed');
+    assert.deepEqual(after, before, `[${label}] Account snapshots must remain unchanged after preflight rejection`);
+    assert.equal(balAfter, balBefore, `[${label}] Signer balance must remain unchanged after preflight rejection`);
+    console.log(`Preflight rejection verified (${label}):`, traducir(rejectedErr));
+  }
 
   console.log(`Business: ${nombreNegocio}`);
   console.log(`PDAs: registro=${registro}, ana=${ana}, luis=${luis}, venta=${venta}`);
@@ -376,6 +411,25 @@ async function main() {
         tracked,
       ),
     );
+    // Case 9a: Zero-amount registrar_venta rejection (preflight)
+    await expectPreflightReject(
+      getRegistrarVentaInstruction({
+        owner: signer,
+        registro,
+        cliente: ana,
+        venta: ventaZero,
+        idCliente: 1,
+        sku: 'ZER01',
+        descripcion: 'Invalida',
+        monto: 0,
+      }),
+      authority,
+      'registrar_venta(ZER01,monto=0)',
+      /Program .* failed: custom program error: 0x1774|Error Code: MontoInvalido\. Error Number: 6004/i,
+      [registro, ana, ventaZero],
+    );
+    assert.equal(await connection.getAccountInfo(new PublicKey(ventaZero), 'confirmed'), null, 'ventaZero must not exist');
+
     registrarFirma(
       sigs,
       'registrarVenta',
@@ -397,39 +451,93 @@ async function main() {
       ),
     );
 
-    if (pausar) await esperarContinuar('previo-a-rechazo');
-
-    // Full snapshots before expected preflight rejection
-    const beforeSnapshots = await Promise.all(tracked.map((addr) => snapshotAccount(connection, addr)));
-    const balanceBeforeReject = await connection.getBalance(authority.publicKey, 'confirmed');
-
-    let rejectedErr: unknown = null;
-    try {
+    // Case 3: Amount correction (cambiar_monto -> 55)
+    registrarFirma(
+      sigs,
+      'cambiarMonto',
       await sendAndConfirmWithReconciliation(
         connection,
         authority,
-        getEliminarClienteInstruction({ owner: signer, registro, cliente: ana, idCliente: 1 }),
-        'eliminar_cliente(1)-expected-reject',
+        getCambiarMontoInstruction({
+          owner: signer,
+          registro,
+          cliente: ana,
+          venta,
+          idCliente: 1,
+          sku: 'CAF01',
+          nuevoMonto: 55,
+        }),
+        'cambiar_monto(CAF01,55)',
         tracked,
-      );
-      assert.fail('Expected eliminar_cliente(1) with active sale to be rejected');
-    } catch (err) {
-      rejectedErr = err;
-    }
-
-    assert.ok(rejectedErr instanceof SendTransactionError, 'Expected SendTransactionError on preflight rejection');
-    const rejectLogs = rejectedErr.logs ?? (await rejectedErr.getLogs?.(connection)) ?? [];
-    assert.match(
-      rejectLogs.join('\n'),
-      /Program .* failed: custom program error: 0x1773|Error Code: ClienteConVentas\. Error Number: 6003/i,
-      'Expected structured ClienteConVentas (0x1773 / 6003) error in preflight logs',
+      ),
     );
-    console.log('Preflight rejection verified (ClienteConVentas 0x1773/6003):', traducir(rejectedErr));
+    const ventaUpdatedInfo = await connection.getAccountInfo(new PublicKey(venta), 'confirmed');
+    assert.ok(ventaUpdatedInfo, 'Expected venta account to exist after cambiar_monto');
+    assert.equal(getVentaDecoder().decode(ventaUpdatedInfo.data).monto, 55, 'Expected venta.monto == 55');
 
-    const afterRejectSnapshots = await Promise.all(tracked.map((addr) => snapshotAccount(connection, addr)));
-    const balanceAfterReject = await connection.getBalance(authority.publicKey, 'confirmed');
-    assert.deepEqual(afterRejectSnapshots, beforeSnapshots, 'Account snapshots must be unchanged after preflight rejection');
-    assert.equal(balanceAfterReject, balanceBeforeReject, 'Authority balance must be unchanged after preflight rejection');
+    // Case 9b: Zero-amount cambiar_monto rejection (preflight)
+    await expectPreflightReject(
+      getCambiarMontoInstruction({
+        owner: signer,
+        registro,
+        cliente: ana,
+        venta,
+        idCliente: 1,
+        sku: 'CAF01',
+        nuevoMonto: 0,
+      }),
+      authority,
+      'cambiar_monto(CAF01,nuevo_monto=0)',
+      /Program .* failed: custom program error: 0x1774|Error Code: MontoInvalido\. Error Number: 6004/i,
+      [registro, ana, venta],
+    );
+
+    // Case 6: Unauthorized wallet rejection (preflight: authority pays fee, intruder signs as owner)
+    const intruder = Keypair.generate();
+    await expectPreflightReject(
+      getCambiarMontoInstruction({
+        owner: createNoopSigner(address(intruder.publicKey.toBase58())),
+        registro,
+        cliente: ana,
+        venta,
+        idCliente: 1,
+        sku: 'CAF01',
+        nuevoMonto: 99,
+      }),
+      authority,
+      'cambiar_monto(unauthorized)',
+      /Program .* failed: custom program error: 0x1770|Error Code: NoOwner\. Error Number: 6000|ConstraintHasOne/i,
+      [registro, ana, venta],
+      [intruder],
+    );
+
+    // Case 7: Mismatched client/sale rejection (preflight: Luis id=2 paired with Ana's CAF01 PDA)
+    await expectPreflightReject(
+      getCambiarMontoInstruction({
+        owner: signer,
+        registro,
+        cliente: luis,
+        venta,
+        idCliente: 2,
+        sku: 'CAF01',
+        nuevoMonto: 77,
+      }),
+      authority,
+      'cambiar_monto(mismatched-client-sale)',
+      /Program .* failed: custom program error: 0x7d6|ConstraintSeeds|Error Number: 2006/i,
+      [registro, ana, luis, venta],
+    );
+
+    if (pausar) await esperarContinuar('previo-a-rechazo');
+
+    // Case 8: Non-empty-client deletion rejection (preflight)
+    await expectPreflightReject(
+      getEliminarClienteInstruction({ owner: signer, registro, cliente: ana, idCliente: 1 }),
+      authority,
+      'eliminar_cliente(1)-expected-reject',
+      /Program .* failed: custom program error: 0x1773|Error Code: ClienteConVentas\. Error Number: 6003/i,
+      tracked,
+    );
 
     if (pausar) await esperarContinuar('post-rechazo');
 
@@ -488,6 +596,25 @@ async function main() {
     const rentRefunded = anaBeforeDelete.lamports!;
     const netDelta = balanceAfterDelete - balanceBeforeDelete;
     assert.equal(netDelta, rentRefunded - delFee, 'Expected authority net balance delta == ana rent refund - tx fee');
+
+    // Case 5b: Monotonic id_counter check after eliminar_cliente(Ana)
+    registrarFirma(
+      sigs,
+      'crearMarta',
+      await sendAndConfirmWithReconciliation(
+        connection,
+        authority,
+        getCrearClienteInstruction({ owner: signer, registro, cliente: marta, nombre: 'Marta' }),
+        'crear_cliente(Marta)',
+        [registro, marta],
+      ),
+    );
+    const martaInfo = await connection.getAccountInfo(new PublicKey(marta), 'confirmed');
+    assert.ok(martaInfo, 'Expected marta account to exist');
+    assert.equal(getClienteDecoder().decode(martaInfo.data).idCliente, 3, 'Expected marta.idCliente == 3 (monotonic)');
+    const regAfterMarta = await connection.getAccountInfo(new PublicKey(registro), 'confirmed');
+    assert.ok(regAfterMarta, 'Expected registro account to exist after crear_cliente(Marta)');
+    assert.equal(getRegistroDecoder().decode(regAfterMarta.data).idCounter, 3, 'Expected registro.idCounter == 3');
 
     console.log('\n=== Devnet Day 5 Verification Summary ===');
     console.log(`Ana rent refunded: ${rentRefunded} lamports`);

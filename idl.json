@@ -513,6 +513,11 @@
       "code": 6003,
       "name": "ClienteConVentas",
       "msg": "Error, el cliente tiene ventas activas"
+    },
+    {
+      "code": 6004,
+      "name": "MontoInvalido",
+      "msg": "Error, el monto debe ser mayor que cero"
     }
   ],
   "types": [

@@ -57,6 +57,7 @@ pub mod registro {
         descripcion: String,
         monto: u32,
     ) -> Result<()> {
+        require!(monto > 0, Errores::MontoInvalido);
         context.accounts.venta.set_inner(Venta {
             sku,
             descripcion,
@@ -125,6 +126,7 @@ pub mod registro {
         sku: String,
         nuevo_monto: u32,
     ) -> Result<()> {
+        require!(nuevo_monto > 0, Errores::MontoInvalido);
         let venta = &mut context.accounts.venta;
         let viejo_monto = venta.monto;
         venta.monto = nuevo_monto;
@@ -151,6 +153,8 @@ pub enum Errores {
     NoCliente,
     #[msg("Error, el cliente tiene ventas activas")]
     ClienteConVentas,
+    #[msg("Error, el monto debe ser mayor que cero")]
+    MontoInvalido,
 }
 
 /////////////////////////// CUENTAS ///////////////////////////

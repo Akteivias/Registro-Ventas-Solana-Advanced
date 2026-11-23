@@ -1,10 +1,10 @@
 /**
  * tests/dia5-browser.ts
  *
- * Automated Browser Verification for Día 5
- * Covers all scenarios from docs/PRUEBAS-AUTOMATIZADAS.md using the
- * chrome-devtools CLI (Option A) without adding heavy dependencies
- * (Playwright/Puppeteer) to package.json.
+ * Automated Browser Verification
+ * Covers the offline simulated-wallet and public-read browser checks from
+ * docs/PRUEBAS-AUTOMATIZADAS.md using the chrome-devtools CLI (Option A)
+ * without adding heavy dependencies (Playwright/Puppeteer) to package.json.
  */
 
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
@@ -52,6 +52,7 @@ const OFFLINE_WALLET_INIT_SCRIPT = `
   const account = Object.freeze({ address, publicKey, chains: ['solana:devnet'], features: ['solana:signTransaction'] });
   let accounts = [];
   const listeners = new Set();
+  window.__offlineSignCalls = 0;
   const wallet = {
     version: '1.0.0', name: 'Offline Test Wallet',
     icon: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiI+PC9zdmc+',
@@ -60,7 +61,7 @@ const OFFLINE_WALLET_INIT_SCRIPT = `
       'standard:connect': { version: '1.0.0', connect: async () => { accounts = [account]; listeners.forEach((f) => f({ accounts })); return { accounts }; } },
       'standard:disconnect': { version: '1.0.0', disconnect: async () => { accounts = []; listeners.forEach((f) => f({ accounts })); } },
       'standard:events': { version: '1.0.0', on: (event, f) => { if (event === 'change') listeners.add(f); return () => listeners.delete(f); } },
-      'solana:signTransaction': { version: '1.0.0', supportedTransactionVersions: ['legacy', 0], signTransaction: async () => { throw new Error('User rejected the request'); } },
+      'solana:signTransaction': { version: '1.0.0', supportedTransactionVersions: ['legacy', 0], signTransaction: async () => { window.__offlineSignCalls += 1; throw new Error('User rejected the request'); } },
     },
   };
   const register = ({ register }) => register(wallet);
@@ -70,9 +71,11 @@ const OFFLINE_WALLET_INIT_SCRIPT = `
 `;
 
 // --- CHROME DEVTOOLS CLI WRAPPER ---
+const CHROME_DEVTOOLS_MCP_PKG = 'chrome-devtools-mcp@1.0.1';
+
 class ChromeDevToolsCli {
   private runCli(subcommand: string, args: string[] = []): string {
-    const fullArgs = ['-p', 'chrome-devtools-mcp', 'chrome-devtools', subcommand, ...args];
+    const fullArgs = ['-p', CHROME_DEVTOOLS_MCP_PKG, 'chrome-devtools', subcommand, ...args];
     try {
       return execFileSync('npx', fullArgs, {
         encoding: 'utf8',
@@ -123,6 +126,10 @@ class ChromeDevToolsCli {
 
   click(uid: string): string {
     return this.runCli('click', [uid]);
+  }
+
+  evaluateScript(fnSource: string): string {
+    return this.runCli('evaluate_script', [fnSource]);
   }
 
   findUid(snapshot: string, label: string | RegExp, role?: string): string {
@@ -288,6 +295,61 @@ async function runOfflineWalletSuite(cli: ChromeDevToolsCli): Promise<void> {
     throw new Error('Expected cancellation alert not found after submitting Eliminar cliente with ID 1.');
   }
   console.log('✔ Customer ID 1 cancellation verified: «La firma fue cancelada en la wallet. Puedes volver a intentarlo.»');
+
+  // 7. Test "Registrar venta" and "Corregir importe" monto = 0 blocking + positive control (monto = 1)
+  for (const spec of [
+    { tab: 'Registrar venta', amountLabel: 'Importe', submit: 'Registrar venta' },
+    { tab: 'Corregir importe', amountLabel: 'Nuevo importe', submit: 'Corregir importe' },
+  ]) {
+    console.log(`7. Testing "${spec.tab}" monto = 0 HTML5 rangeUnderflow + positive control (monto = 1)...`);
+    cli.click(cli.findUid(snapshot, spec.tab, 'button'));
+    await new Promise((r) => setTimeout(r, 500));
+    snapshot = cli.takeSnapshot();
+
+    const idUid = cli.findUid(snapshot, 'ID del cliente', 'spinbutton');
+    cli.fill(idUid, '1');
+    const skuUid = cli.findUid(snapshot, 'SKU', 'textbox');
+    cli.fill(skuUid, 'CAF01');
+    if (spec.tab === 'Registrar venta') {
+      const descUid = cli.findUid(snapshot, 'Descripción', 'textbox');
+      cli.fill(descUid, 'Cafe americano');
+    }
+
+    let amountUid: string;
+    try {
+      amountUid = cli.findUid(snapshot, spec.amountLabel, 'spinbutton');
+    } catch {
+      amountUid = cli.findUid(snapshot, spec.amountLabel, 'textbox');
+    }
+    cli.fill(amountUid, '0');
+    const beforeZero = cli.evaluateScript('() => ({ signCalls: window.__offlineSignCalls || 0 })');
+    const submitUid = cli.findFormButton(snapshot, spec.submit);
+    cli.click(submitUid);
+    await new Promise((r) => setTimeout(r, 500));
+    snapshot = cli.takeSnapshot();
+
+    const zeroEval = cli.evaluateScript(
+      `() => { const el = Array.from(document.querySelectorAll('form input[type="number"]')).find((i) => i.min === '1' && i.max === '4294967295'); return { value: el?.value ?? null, valid: el?.validity?.valid ?? null, rangeUnderflow: el?.validity?.rangeUnderflow ?? null, min: el?.min ?? null, signCalls: window.__offlineSignCalls || 0 }; }`,
+    );
+    const beforeCalls = Number(beforeZero.match(/"signCalls"\s*:\s*(\d+)/)?.[1] ?? '-1');
+    const afterZeroCalls = Number(zeroEval.match(/"signCalls"\s*:\s*(\d+)/)?.[1] ?? '-1');
+    if (!zeroEval.includes('"rangeUnderflow":true') || !zeroEval.includes('"valid":false') || afterZeroCalls !== beforeCalls) {
+      throw new Error(`${spec.tab} monto=0 validation/no-sign check failed: ${zeroEval}`);
+    }
+    console.log(`✔ ${spec.tab} monto=0 blocked by HTML5 min="1" (rangeUnderflow=true, signCalls unchanged=${afterZeroCalls}).`);
+
+    // Positive control: same completed form with amount 1 reaches the simulated wallet
+    cli.fill(amountUid, '1');
+    cli.click(submitUid);
+    await new Promise((r) => setTimeout(r, 1200));
+    snapshot = cli.takeSnapshot();
+    const posEval = cli.evaluateScript('() => ({ signCalls: window.__offlineSignCalls || 0 })');
+    const afterPosCalls = Number(posEval.match(/"signCalls"\s*:\s*(\d+)/)?.[1] ?? '-1');
+    if (afterPosCalls !== beforeCalls + 1 || !cli.hasText(snapshot, 'La firma fue cancelada en la wallet')) {
+      throw new Error(`${spec.tab} positive control (monto=1) did not reach simulated wallet: ${posEval}`);
+    }
+    console.log(`✔ ${spec.tab} monto=1 positive control reached simulated wallet (signCalls=${afterPosCalls}).`);
+  }
 }
 
 // --- SUITE 2: COORDINATED DEVNET READ OBSERVATION ---
