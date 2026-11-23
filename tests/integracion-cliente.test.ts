@@ -28,6 +28,12 @@ import {
 } from '../scripts/probar-local.mjs';
 import { expectProgramRejection } from './helpers/rechazo';
 import { crearManejadorFirmante, type RpcFirmante } from './helpers/firmante-temporal';
+import {
+  allocateRuntimeDir,
+  buildWalletInitScript,
+  formatRecoveryReport,
+  parseBrowserDevnetOptions,
+} from './dia5-browser-devnet';
 import { Keypair, Transaction } from '@solana/web3.js';
 import { getCrearRegistroInstruction, getCrearClienteInstruction } from '../clients/js/src/generated';
 
@@ -657,4 +663,54 @@ test('firmante temporal aplica bloqueo conservador, serializacion, avance estric
   } finally {
     rmSync(tempRoot, { recursive: true, force: true });
   }
+});
+
+test('dia5-browser-devnet importa sin efectos secundarios, aisla runtime, exige autoridad esperada y protege origen', () => {
+  assert.throws(
+    () => parseBrowserDevnetOptions([], {}),
+    /DEVNET_EXPECTED_AUTHORITY es obligatorio/,
+  );
+  assert.throws(
+    () => parseBrowserDevnetOptions(['--grabar', 'salida.webm'], { DEVNET_EXPECTED_AUTHORITY: owner }),
+    /debe terminar en \.mp4/,
+  );
+  const parsed = parseBrowserDevnetOptions(
+    ['--grabar', '.aula/local-runs/walkthrough.mp4', '--explorer'],
+    { DEVNET_EXPECTED_AUTHORITY: owner, DEVNET_AUTHORITY_KEYPAIR: '~/.config/solana/custom.json' },
+  );
+  assert.equal(parsed.expectedAuthority, owner);
+  assert.equal(parsed.keypairPath, '~/.config/solana/custom.json');
+  assert.equal(parsed.recordPath, '.aula/local-runs/walkthrough.mp4');
+  assert.equal(parsed.explorer, true);
+
+  const script = buildWalletInitScript({
+    address: owner,
+    publicKeyBytes: Array.from(new Uint8Array(32).fill(7)),
+    port: 55555,
+    token: 'tok-test',
+  });
+  assert.match(script, /if\(location\.origin!=="http:\/\/127\.0\.0\.1:5173"\)return;/);
+  assert.match(script, /window\.__signCalls=0/);
+  assert.match(script, /Dedicated Devnet Test Wallet/);
+  assert.match(script, new RegExp(owner));
+  assert.doesNotMatch(script, /secretKey/i);
+
+  const rtDir = allocateRuntimeDir();
+  try {
+    assert.equal(existsSync(rtDir), true);
+    assert.ok(Buffer.byteLength(join(rtDir, 'chrome-devtools-mcp', 'server.sock'), 'utf8') <= 103);
+  } finally {
+    rmSync(rtDir, { recursive: true, force: true });
+  }
+
+  const recovery = formatRecoveryReport({
+    biz: 'DevnetZ0-err',
+    authorityPubkey: owner,
+    pdas: { registro: 'reg1', ana: 'ana1', venta: 'ven1' },
+    statePath: '~/.config/solana/state.json',
+    capturedSigs: new Map([[0, 'sig0'], [1, 'sig1']]),
+  });
+  assert.match(recovery, /Do NOT blindly resend/);
+  assert.match(recovery, /stage=0: sig0/);
+  assert.match(recovery, /stage=1: sig1/);
 });
